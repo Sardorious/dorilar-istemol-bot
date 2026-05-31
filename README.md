@@ -78,3 +78,4 @@ cd /opt/dorilar-bot && docker compose up -d
 - Iste'mol qilindi / Keyinroq / O'tkazib yuborish
 - Snooze: 5, 10, 15, 30 daqiqa, 1, 2 soat
 - Iste'mol tarixi
+# trigger deploy
