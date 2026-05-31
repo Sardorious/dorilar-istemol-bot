@@ -11,16 +11,18 @@ logger = logging.getLogger(__name__)
 
 
 async def schedule_daily_reminders(bot: Bot):
-    """Called once at startup and then daily — schedules today's reminders for all patients."""
     today = date.today()
     async with AsyncSessionLocal() as session:
         result = await session.execute(
-            select(Patient).where(Patient.is_active, Patient.telegram_id.isnot(None))
+            select(Patient).where(
+                Patient.is_active,
+                Patient.telegram_id.isnot(None)
+            )
         )
         patients = result.scalars().all()
 
     for patient in patients:
-        start = patient.start_date.date() if hasattr(patient.start_date, 'date') else patient.start_date
+        start = patient.start_date.date() if hasattr(patient.start_date, "date") else patient.start_date
         day = (today - start).days + 1
         if day < 1:
             continue
@@ -32,7 +34,10 @@ async def schedule_daily_reminders(bot: Bot):
                     continue
                 run_at = datetime.combine(
                     today,
-                    datetime.min.time().replace(hour=med.reminder_hour, minute=med.reminder_minute or 0)
+                    datetime.min.time().replace(
+                        hour=med.reminder_hour,
+                        minute=med.reminder_minute or 0
+                    )
                 )
                 if run_at < datetime.now():
                     continue
@@ -49,4 +54,4 @@ async def schedule_daily_reminders(bot: Bot):
                     run_at=run_at,
                     job_id=job_id
                 )
-        logger.info(f"Scheduled reminders for patient {patient.patient_code} day {day}")
+        logger.info(f"Бемор {patient.id} учун {day}-кун эслатмалари режалаштирилди")

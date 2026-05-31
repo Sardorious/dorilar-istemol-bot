@@ -4,7 +4,8 @@ from typing import List
 
 class Settings(BaseSettings):
     BOT_TOKEN: str
-    DATABASE_URL: str = "sqlite+aiosqlite:///./dorilar.db"
+    ANTHROPIC_API_KEY: str
+    DATABASE_URL: str = "sqlite+aiosqlite:///./data/dorilar.db"
     ADMIN_IDS: str = ""
     TZ: str = "Asia/Tashkent"
 

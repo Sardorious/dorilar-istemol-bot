@@ -1,15 +1,15 @@
 import logging
+from datetime import datetime
 from aiogram import Router, F, Bot
-from aiogram.types import Message, CallbackQuery
-from aiogram.fsm.context import FSMContext
+from aiogram.types import Message, CallbackQuery, Document
 from aiogram.filters import CommandStart, Command
 
 from app.db.engine import AsyncSessionLocal
 from app.db import queries as q
-from app.bot.states import AuthStates
 from app.bot.keyboards import (
     main_menu_keyboard, calendar_keyboard,
-    day_meds_keyboard, dose_keyboard, snooze_keyboard
+    day_meds_keyboard, dose_keyboard, snooze_keyboard,
+    patients_list_keyboard,
 )
 from app.bot.utils import get_treatment_day, build_day_summary, format_status, format_time_slot
 from app.scheduler.jobs import schedule_snooze
@@ -18,60 +18,104 @@ logger = logging.getLogger(__name__)
 router = Router()
 
 
+# ── /start ───────────────────────────────────────────────────────────────────
+
 @router.message(CommandStart())
-async def cmd_start(message: Message, state: FSMContext):
+async def cmd_start(message: Message):
     async with AsyncSessionLocal() as session:
-        patient = await q.get_patient_by_telegram_id(session, message.from_user.id)
+        patient = await q.get_active_patient(session, message.from_user.id)
 
     if patient:
         day = get_treatment_day(patient)
         await message.answer(
-            f"👋 Хуш келибсиз, <b>{patient.full_name}</b>!\n\n"
-            f"Бугун даволанишингизнинг <b>{day}-куни</b>.",
+            f"👋 Хуш келибсиз!\n\n"
+            f"{'<b>' + patient.full_name + '</b>' + chr(10) if patient.full_name else ''}"
+            f"Бугун даволанишнинг <b>{day}-куни</b>.",
             parse_mode="HTML",
             reply_markup=main_menu_keyboard()
         )
     else:
-        await state.set_state(AuthStates.waiting_for_code)
         await message.answer(
             "👋 Ассалому алайкум!\n\n"
-            "Илтимос, сизга берилган <b>бемор кодини</b> киритинг:\n\n"
-            "Масалан: <code>BEMOR-001</code>",
-            parse_mode="HTML"
+            "Рецепт PDF файлини юборинг — мен ундаги дориlarни ўқиб, "
+            "кунлик жадвал тузаман. 📄"
         )
 
 
-@router.message(AuthStates.waiting_for_code)
-async def process_patient_code(message: Message, state: FSMContext):
-    code = message.text.strip().upper()
-    async with AsyncSessionLocal() as session:
-        patient = await q.get_patient_by_code(session, code)
-        if not patient:
-            await message.answer(
-                "❌ Бемор коди топилмади. Илтимос, қайтадан текшириб киритинг:"
-            )
+# ── PDF qabul qilish ─────────────────────────────────────────────────────────
+
+@router.message(F.document)
+async def handle_pdf(message: Message, bot: Bot):
+    doc: Document = message.document
+    if not doc.file_name or not doc.file_name.lower().endswith(".pdf"):
+        await message.answer("❌ Фақат PDF файл юборинг.")
+        return
+
+    status_msg = await message.answer("⏳ PDF ўқилмоқда, дориlar аниқланмоқда...")
+
+    try:
+        file = await bot.get_file(doc.file_id)
+        pdf_bytes = await bot.download_file(file.file_path)
+        pdf_content = pdf_bytes.read() if hasattr(pdf_bytes, "read") else bytes(pdf_bytes)
+
+        from app.pdf_parser import parse_pdf_to_medications
+        data = await parse_pdf_to_medications(pdf_content)
+
+        meds = data.get("medications", [])
+        if not meds:
+            await status_msg.edit_text("❌ PDF дан дориlar топилмади. Бошқа файл юборинг.")
             return
-        await q.link_patient_telegram(session, patient, message.from_user.id)
 
-    await state.clear()
-    day = get_treatment_day(patient)
-    await message.answer(
-        f"✅ Муваффақиятли уланди!\n\n"
-        f"<b>{patient.full_name}</b>\n"
-        f"Даволаниш бошланган кун: {patient.start_date.strftime('%d.%m.%Y')}\n"
-        f"Бугун: <b>{day}-кун</b>",
-        parse_mode="HTML",
-        reply_markup=main_menu_keyboard()
-    )
+        start_date = datetime.now()
+        if data.get("start_date"):
+            try:
+                start_date = datetime.strptime(data["start_date"], "%d.%m.%Y")
+            except ValueError:
+                pass
 
+        notes_list = data.get("daily_notes", [])
+        notes_str = "\n".join(notes_list) if notes_list else None
+
+        async with AsyncSessionLocal() as session:
+            patient = await q.create_patient_from_pdf(
+                session,
+                tg_id=message.from_user.id,
+                full_name=data.get("patient_name"),
+                start_date=start_date,
+                diagnosis=data.get("diagnosis"),
+                diet_note=data.get("diet_note"),
+                daily_notes=notes_str,
+                medications=meds,
+            )
+
+        name_line = f"👤 <b>{patient.full_name}</b>\n" if patient.full_name else ""
+        diag_line = f"🩺 <i>{patient.diagnosis}</i>\n\n" if patient.diagnosis else "\n"
+
+        await status_msg.edit_text(
+            f"✅ <b>{len(meds)} та дори аниқланди!</b>\n\n"
+            f"{name_line}{diag_line}"
+            f"Бугун <b>1-кун</b>. Кунлик жадвални кўриш учун:",
+            parse_mode="HTML",
+            reply_markup=main_menu_keyboard()
+        )
+
+    except Exception as e:
+        logger.error(f"PDF parse xatosi: {e}", exc_info=True)
+        await status_msg.edit_text(
+            "❌ PDF ўқишда хатолик юз берди. "
+            "Файл тўғри рецепт эканлигини текшириб, қайта юборинг."
+        )
+
+
+# ── Bugungi dorilar ──────────────────────────────────────────────────────────
 
 @router.callback_query(F.data == "today")
 async def cb_today(callback: CallbackQuery):
     await callback.answer()
     async with AsyncSessionLocal() as session:
-        patient = await q.get_patient_by_telegram_id(session, callback.from_user.id)
+        patient = await q.get_active_patient(session, callback.from_user.id)
         if not patient:
-            await callback.message.answer("❌ Сиз тизимда рўйхатдан ўтмадингиз. /start босинг.")
+            await callback.message.answer("❌ Аввал PDF файл юборинг.")
             return
         day = get_treatment_day(patient)
         meds = await q.get_meds_for_day(session, patient.id, day)
@@ -82,19 +126,20 @@ async def cb_today(callback: CallbackQuery):
 
     text = build_day_summary(day, meds_with_logs)
     await callback.message.answer(
-        text,
-        parse_mode="HTML",
+        text, parse_mode="HTML",
         reply_markup=day_meds_keyboard(meds_with_logs)
     )
 
+
+# ── Kalendar ─────────────────────────────────────────────────────────────────
 
 @router.callback_query(F.data == "show_calendar")
 async def cb_show_calendar(callback: CallbackQuery):
     await callback.answer()
     async with AsyncSessionLocal() as session:
-        patient = await q.get_patient_by_telegram_id(session, callback.from_user.id)
+        patient = await q.get_active_patient(session, callback.from_user.id)
         if not patient:
-            await callback.message.answer("❌ /start босинг.")
+            await callback.message.answer("❌ Аввал PDF файл юборинг.")
             return
         current_day = get_treatment_day(patient)
         from sqlalchemy import select, func
@@ -116,7 +161,7 @@ async def cb_day_selected(callback: CallbackQuery):
     await callback.answer()
     day = int(callback.data.split(":")[1])
     async with AsyncSessionLocal() as session:
-        patient = await q.get_patient_by_telegram_id(session, callback.from_user.id)
+        patient = await q.get_active_patient(session, callback.from_user.id)
         if not patient:
             return
         meds = await q.get_meds_for_day(session, patient.id, day)
@@ -127,32 +172,29 @@ async def cb_day_selected(callback: CallbackQuery):
 
     text = build_day_summary(day, meds_with_logs)
     await callback.message.answer(
-        text,
-        parse_mode="HTML",
+        text, parse_mode="HTML",
         reply_markup=day_meds_keyboard(meds_with_logs)
     )
 
+
+# ── Dori detali ───────────────────────────────────────────────────────────────
 
 @router.callback_query(F.data.startswith("med_detail:"))
 async def cb_med_detail(callback: CallbackQuery):
     await callback.answer()
     parts = callback.data.split(":")
-    med_id = int(parts[1])
-    log_id = int(parts[2])
+    med_id, log_id = int(parts[1]), int(parts[2])
 
     async with AsyncSessionLocal() as session:
         from sqlalchemy import select
         from app.db.models import Medication, DoseLog
-        med_res = await session.execute(select(Medication).where(Medication.id == med_id))
-        med = med_res.scalar_one_or_none()
-        log_res = await session.execute(select(DoseLog).where(DoseLog.id == log_id))
-        log = log_res.scalar_one_or_none()
+        med = (await session.execute(select(Medication).where(Medication.id == med_id))).scalar_one_or_none()
+        log = (await session.execute(select(DoseLog).where(DoseLog.id == log_id))).scalar_one_or_none()
 
     if not med:
         await callback.answer("Топилмади", show_alert=True)
         return
 
-    status_text = format_status(log.status if log else "pending")
     text = (
         f"💊 <b>{med.name}</b>\n\n"
         f"📋 Миқдор: {med.dose}\n"
@@ -161,13 +203,13 @@ async def cb_med_detail(callback: CallbackQuery):
     )
     if med.note:
         text += f"ℹ️ Изоҳ: {med.note}\n"
-    text += f"\n{status_text}"
+    text += f"\n{format_status(log.status if log else 'pending')}"
 
-    if log and log.status in ("pending", "snoozed"):
-        await callback.message.answer(text, parse_mode="HTML", reply_markup=dose_keyboard(log.id))
-    else:
-        await callback.message.answer(text, parse_mode="HTML")
+    kb = dose_keyboard(log.id) if log and log.status in ("pending", "snoozed") else None
+    await callback.message.answer(text, parse_mode="HTML", reply_markup=kb)
 
+
+# ── Iste'mol / skip / snooze ─────────────────────────────────────────────────
 
 @router.callback_query(F.data.startswith("taken:"))
 async def cb_taken(callback: CallbackQuery):
@@ -210,45 +252,34 @@ async def cb_back_to_dose(callback: CallbackQuery):
 @router.callback_query(F.data.startswith("snooze:"))
 async def cb_snooze(callback: CallbackQuery, bot: Bot):
     parts = callback.data.split(":")
-    log_id = int(parts[1])
-    minutes = int(parts[2])
+    log_id, minutes = int(parts[1]), int(parts[2])
 
     async with AsyncSessionLocal() as session:
         from sqlalchemy import select
         from app.db.models import DoseLog, Medication
-        log_res = await session.execute(select(DoseLog).where(DoseLog.id == log_id))
-        log = log_res.scalar_one_or_none()
+        log = (await session.execute(select(DoseLog).where(DoseLog.id == log_id))).scalar_one_or_none()
         med = None
         if log:
-            med_res = await session.execute(select(Medication).where(Medication.id == log.medication_id))
-            med = med_res.scalar_one_or_none()
+            med = (await session.execute(select(Medication).where(Medication.id == log.medication_id))).scalar_one_or_none()
             await q.snooze_dose(session, log_id, minutes)
 
     if log and med:
-        schedule_snooze(
-            bot=bot,
-            telegram_id=callback.from_user.id,
-            dose_log_id=log_id,
-            med_name=med.name,
-            dose=med.dose,
-            minutes=minutes
-        )
-        if minutes < 60:
-            label = f"{minutes} дақиқа"
-        else:
-            label = f"{minutes // 60} соат"
+        schedule_snooze(bot=bot, telegram_id=callback.from_user.id,
+                        dose_log_id=log_id, med_name=med.name, dose=med.dose, minutes=minutes)
+        label = f"{minutes} дақиқа" if minutes < 60 else f"{minutes // 60} соат"
         await callback.message.edit_text(
-            f"⏰ <b>{label} дан кейин эслатаман</b>\n\n{med.name}",
-            parse_mode="HTML"
+            f"⏰ <b>{label} дан кейин эслатаман</b>\n\n{med.name}", parse_mode="HTML"
         )
     await callback.answer(f"⏰ {minutes} дақиқадан кейин эслатаман")
 
+
+# ── Tarix ─────────────────────────────────────────────────────────────────────
 
 @router.callback_query(F.data == "history")
 async def cb_history(callback: CallbackQuery):
     await callback.answer()
     async with AsyncSessionLocal() as session:
-        patient = await q.get_patient_by_telegram_id(session, callback.from_user.id)
+        patient = await q.get_active_patient(session, callback.from_user.id)
         if not patient:
             return
         rows = await q.get_history(session, patient.id, limit=30)
@@ -268,6 +299,57 @@ async def cb_history(callback: CallbackQuery):
         lines.append(f"{icon} {med.name[:35]} {taken_str}")
 
     await callback.message.answer("\n".join(lines), parse_mode="HTML")
+
+
+# ── Bemorlar ro'yxati ─────────────────────────────────────────────────────────
+
+@router.callback_query(F.data == "my_patients")
+async def cb_my_patients(callback: CallbackQuery):
+    await callback.answer()
+    async with AsyncSessionLocal() as session:
+        patients = await q.get_all_patients(session, callback.from_user.id)
+
+    if not patients:
+        await callback.message.answer("Рецептлар йўқ. PDF юборинг.")
+        return
+
+    await callback.message.answer(
+        "📋 <b>Сизнинг рецептларингиз:</b>",
+        parse_mode="HTML",
+        reply_markup=patients_list_keyboard(patients)
+    )
+
+
+@router.callback_query(F.data.startswith("switch_patient:"))
+async def cb_switch_patient(callback: CallbackQuery):
+    await callback.answer()
+    patient_id = int(callback.data.split(":")[1])
+    async with AsyncSessionLocal() as session:
+        from sqlalchemy import update
+        from app.db.models import Patient
+        await session.execute(
+            update(Patient)
+            .where(Patient.telegram_id == callback.from_user.id)
+            .values(is_active=False)
+        )
+        await session.execute(
+            update(Patient)
+            .where(Patient.id == patient_id)
+            .values(is_active=True)
+        )
+        await session.commit()
+        patient = (await session.execute(
+            __import__("sqlalchemy").select(Patient).where(Patient.id == patient_id)
+        )).scalar_one_or_none()
+
+    if patient:
+        day = get_treatment_day(patient)
+        name = patient.full_name or "Бемор"
+        await callback.message.answer(
+            f"✅ <b>{name}</b> — {day}-кун",
+            parse_mode="HTML",
+            reply_markup=main_menu_keyboard()
+        )
 
 
 @router.message(Command("menu"))

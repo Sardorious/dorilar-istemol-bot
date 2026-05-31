@@ -21,13 +21,12 @@ def test_treatment_day_10():
 
 
 def test_format_time_slot_known():
-    assert "Bomdod" in format_time_slot("morning")
-    assert "Nonushta" in format_time_slot("breakfast")
+    assert "Бомдод" in format_time_slot("morning")
+    assert "Нонушта" in format_time_slot("breakfast")
 
 
 def test_format_time_slot_unknown():
-    result = format_time_slot("unknown_slot")
-    assert result == "unknown_slot"
+    assert format_time_slot("unknown_slot") == "unknown_slot"
 
 
 def test_format_status():

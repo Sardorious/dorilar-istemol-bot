@@ -2,26 +2,83 @@ from datetime import datetime, timedelta
 from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
-from app.db.models import Patient, Medication, DoseLog, ReminderJob
+from app.db.models import Patient, Medication, DoseLog
 
 
-async def get_patient_by_code(session: AsyncSession, code: str) -> Optional[Patient]:
+async def get_active_patient(session: AsyncSession, tg_id: int) -> Optional[Patient]:
     result = await session.execute(
-        select(Patient).where(Patient.patient_code == code, Patient.is_active)
+        select(Patient).where(
+            Patient.telegram_id == tg_id,
+            Patient.is_active
+        ).order_by(Patient.created_at.desc())
     )
-    return result.scalar_one_or_none()
+    return result.scalars().first()
 
 
-async def get_patient_by_telegram_id(session: AsyncSession, tg_id: int) -> Optional[Patient]:
+async def get_all_patients(session: AsyncSession, tg_id: int) -> List[Patient]:
     result = await session.execute(
-        select(Patient).where(Patient.telegram_id == tg_id, Patient.is_active)
+        select(Patient).where(
+            Patient.telegram_id == tg_id,
+            Patient.is_active
+        ).order_by(Patient.created_at.desc())
     )
-    return result.scalar_one_or_none()
+    return result.scalars().all()
 
 
-async def link_patient_telegram(session: AsyncSession, patient: Patient, tg_id: int):
-    patient.telegram_id = tg_id
+async def create_patient_from_pdf(
+    session: AsyncSession,
+    tg_id: int,
+    full_name: Optional[str],
+    start_date: datetime,
+    diagnosis: Optional[str],
+    diet_note: Optional[str],
+    daily_notes: Optional[str],
+    medications: list,
+) -> Patient:
+    patient = Patient(
+        telegram_id=tg_id,
+        full_name=full_name,
+        start_date=start_date,
+        diagnosis=diagnosis,
+        diet_note=diet_note,
+        daily_notes=daily_notes,
+    )
+    session.add(patient)
+    await session.flush()
+
+    reminder_map = {
+        "morning":          (5,  30),
+        "before_breakfast": (7,  0),
+        "breakfast":        (7,  30),
+        "afternoon":        (13, 0),
+        "before_dinner":    (17, 0),
+        "dinner":           (19, 0),
+        "evening":          (20, 0),
+        "night":            (21, 0),
+        "injection":        (9,  0),
+        "im":               (19, 30),
+    }
+
+    for m in medications:
+        slot = m.get("time_slot", "breakfast")
+        rh, rm = reminder_map.get(slot, (None, None))
+        med = Medication(
+            patient_id=patient.id,
+            name=m["name"],
+            dose=m.get("dose", ""),
+            note=m.get("note", ""),
+            time_label=m.get("time_label", ""),
+            time_slot=slot,
+            start_day=m.get("start_day", 1),
+            end_day=m.get("end_day", 30),
+            reminder_hour=rh,
+            reminder_minute=rm,
+        )
+        session.add(med)
+
     await session.commit()
+    await session.refresh(patient)
+    return patient
 
 
 async def get_meds_for_day(session: AsyncSession, patient_id: int, day: int) -> List[Medication]:
@@ -40,7 +97,7 @@ async def get_or_create_dose_log(
     patient_id: int,
     medication_id: int,
     day: int,
-    scheduled_time: Optional[datetime] = None
+    scheduled_time=None,
 ) -> DoseLog:
     result = await session.execute(
         select(DoseLog).where(
@@ -66,8 +123,7 @@ async def get_or_create_dose_log(
 
 async def mark_dose_taken(session: AsyncSession, dose_log_id: int):
     await session.execute(
-        update(DoseLog)
-        .where(DoseLog.id == dose_log_id)
+        update(DoseLog).where(DoseLog.id == dose_log_id)
         .values(status="taken", taken_at=datetime.utcnow())
     )
     await session.commit()
@@ -75,9 +131,7 @@ async def mark_dose_taken(session: AsyncSession, dose_log_id: int):
 
 async def mark_dose_skipped(session: AsyncSession, dose_log_id: int):
     await session.execute(
-        update(DoseLog)
-        .where(DoseLog.id == dose_log_id)
-        .values(status="skipped")
+        update(DoseLog).where(DoseLog.id == dose_log_id).values(status="skipped")
     )
     await session.commit()
 
@@ -85,29 +139,14 @@ async def mark_dose_skipped(session: AsyncSession, dose_log_id: int):
 async def snooze_dose(session: AsyncSession, dose_log_id: int, minutes: int) -> datetime:
     snooze_time = datetime.utcnow() + timedelta(minutes=minutes)
     await session.execute(
-        update(DoseLog)
-        .where(DoseLog.id == dose_log_id)
+        update(DoseLog).where(DoseLog.id == dose_log_id)
         .values(status="snoozed", snooze_until=snooze_time)
     )
     await session.commit()
     return snooze_time
 
 
-async def get_day_dose_logs(
-    session: AsyncSession, patient_id: int, day: int
-) -> List[DoseLog]:
-    result = await session.execute(
-        select(DoseLog).where(
-            DoseLog.patient_id == patient_id,
-            DoseLog.treatment_day == day
-        )
-    )
-    return result.scalars().all()
-
-
-async def get_history(
-    session: AsyncSession, patient_id: int, limit: int = 50
-) -> List[DoseLog]:
+async def get_history(session: AsyncSession, patient_id: int, limit: int = 40):
     result = await session.execute(
         select(DoseLog, Medication)
         .join(Medication, DoseLog.medication_id == Medication.id)
@@ -116,47 +155,3 @@ async def get_history(
         .limit(limit)
     )
     return result.all()
-
-
-async def create_patient(
-    session: AsyncSession,
-    code: str,
-    full_name: str,
-    start_date: datetime,
-    notes: str = ""
-) -> Patient:
-    patient = Patient(
-        patient_code=code,
-        full_name=full_name,
-        start_date=start_date,
-        notes=notes
-    )
-    session.add(patient)
-    await session.commit()
-    await session.refresh(patient)
-    return patient
-
-
-async def add_medication(session: AsyncSession, **kwargs) -> Medication:
-    med = Medication(**kwargs)
-    session.add(med)
-    await session.commit()
-    await session.refresh(med)
-    return med
-
-
-async def save_reminder_job(
-    session: AsyncSession,
-    dose_log_id: int,
-    telegram_id: int,
-    job_id: str,
-    scheduled_at: datetime
-):
-    job = ReminderJob(
-        dose_log_id=dose_log_id,
-        telegram_id=telegram_id,
-        job_id=job_id,
-        scheduled_at=scheduled_at
-    )
-    session.add(job)
-    await session.commit()

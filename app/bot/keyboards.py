@@ -13,15 +13,8 @@ def dose_keyboard(dose_log_id: int) -> InlineKeyboardMarkup:
 
 def snooze_keyboard(dose_log_id: int) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
-    options = [
-        ("5 дақиқа",  5),
-        ("10 дақиқа", 10),
-        ("15 дақиқа", 15),
-        ("30 дақиқа", 30),
-        ("1 соат",    60),
-        ("2 соат",    120),
-    ]
-    for label, minutes in options:
+    for label, minutes in [("5 дақиқа", 5), ("10 дақиқа", 10), ("15 дақиқа", 15),
+                            ("30 дақиқа", 30), ("1 соат", 60), ("2 соат", 120)]:
         builder.button(text=label, callback_data=f"snooze:{dose_log_id}:{minutes}")
     builder.button(text="◀️ Орқага", callback_data=f"back_to_dose:{dose_log_id}")
     builder.adjust(3, 3, 1)
@@ -40,14 +33,11 @@ def calendar_keyboard(treatment_days: int, current_day: int = 1) -> InlineKeyboa
 def day_meds_keyboard(meds_with_logs: list) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     for med, log in meds_with_logs:
-        status_icon = {
-            "taken":   "✅",
-            "skipped": "❌",
-            "snoozed": "⏰",
-            "pending": "💊",
-        }.get(log.status if log else "pending", "💊")
+        icon = {"taken": "✅", "skipped": "❌", "snoozed": "⏰", "pending": "💊"}.get(
+            log.status if log else "pending", "💊"
+        )
         builder.button(
-            text=f"{status_icon} {med.name[:28]}",
+            text=f"{icon} {med.name[:28]}",
             callback_data=f"med_detail:{med.id}:{log.id if log else 0}"
         )
     builder.button(text="📋 Тарих",    callback_data="history")
@@ -61,13 +51,17 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
     builder.button(text="🗓 Бугунги дориlar",  callback_data="today")
     builder.button(text="📅 Календар",          callback_data="show_calendar")
     builder.button(text="📋 Тарих",             callback_data="history")
+    builder.button(text="📂 Рецептларим",       callback_data="my_patients")
     builder.adjust(1)
     return builder.as_markup()
 
 
-def admin_keyboard() -> InlineKeyboardMarkup:
+def patients_list_keyboard(patients: list) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
-    builder.button(text="➕ Янги бемор қўшиш",    callback_data="admin_add_patient")
-    builder.button(text="📋 Беморлар рўйхати",    callback_data="admin_list_patients")
+    for p in patients:
+        name = p.full_name or "Номсиз рецепт"
+        date_str = p.created_at.strftime("%d.%m.%Y") if p.created_at else ""
+        label = f"{'✅ ' if p.is_active else ''}{name} ({date_str})"
+        builder.button(text=label[:40], callback_data=f"switch_patient:{p.id}")
     builder.adjust(1)
     return builder.as_markup()
