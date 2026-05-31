@@ -51,6 +51,7 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
     builder.button(text="🗓 Бугунги дориlar",  callback_data="today")
     builder.button(text="📅 Календар",          callback_data="show_calendar")
     builder.button(text="📋 Тарих",             callback_data="history")
+    builder.button(text="🛒 Харид рўйхати",       callback_data="shopping_list")
     builder.button(text="📂 Рецептларим",       callback_data="my_patients")
     builder.adjust(1)
     return builder.as_markup()

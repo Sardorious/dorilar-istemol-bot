@@ -355,3 +355,78 @@ async def cb_switch_patient(callback: CallbackQuery):
 @router.message(Command("menu"))
 async def cmd_menu(message: Message):
     await message.answer("Асосий менью:", reply_markup=main_menu_keyboard())
+
+
+# ── Xarid ro'yxati ────────────────────────────────────────────────────────────
+
+@router.callback_query(F.data == "shopping_list")
+async def cb_shopping_list(callback: CallbackQuery):
+    await callback.answer()
+    async with AsyncSessionLocal() as session:
+        patient = await q.get_active_patient(session, callback.from_user.id)
+        if not patient:
+            await callback.message.answer("❌ Аввал PDF файл юборинг.")
+            return
+        from app.db.queries import get_all_meds
+        meds = await get_all_meds(session, patient.id)
+
+    if not meds:
+        await callback.message.answer("Дориlar топилмади.")
+        return
+
+    # Dorilarni nom bo'yicha guruhlash va umumiy kun hisoblash
+    from collections import defaultdict
+    grouped = defaultdict(list)
+    for med in meds:
+        grouped[med.name].append(med)
+
+    # Kapelnitsa va oddiy dorilarni ajratish
+    injection_slots = {"injection", "im"}
+    regular = {}
+    injections = {}
+
+    for name, med_list in grouped.items():
+        total_days = sum(m.end_day - m.start_day + 1 for m in med_list)
+        slot = med_list[0].time_slot
+        dose = med_list[0].dose
+        times_per_day = 1
+        # dozadan kunlik miqdorni aniqlash
+        dose_lower = dose.lower()
+        if "3 мах" in dose_lower or "3 маҳал" in dose_lower or "*3" in dose_lower:
+            times_per_day = 3
+        elif "2 мах" in dose_lower or "2 маҳал" in dose_lower or "*2" in dose_lower:
+            times_per_day = 2
+
+        entry = {"name": name, "dose": dose, "total_days": total_days, "times_per_day": times_per_day}
+        if slot in injection_slots:
+            injections[name] = entry
+        else:
+            regular[name] = entry
+
+    lines = ["🛒 <b>Хариd рўйхати</b>\n"]
+
+    if regular:
+        lines.append("💊 <b>Дориlar:</b>")
+        for item in regular.values():
+            total = item["total_days"] * item["times_per_day"]
+            lines.append(f"• {item['name']}")
+            lines.append(f"  <i>{item['dose']}</i>")
+            lines.append(f"  📦 Тахминан <b>{total}</b> та/капсул ({item['total_days']} кун)")
+
+    if injections:
+        lines.append("\n💉 <b>Капельница/уколлар:</b>")
+        for item in injections.values():
+            lines.append(f"• {item['name']}")
+            lines.append(f"  <i>{item['dose']}</i>")
+            lines.append(f"  📦 <b>{item['total_days']}</b> процедура")
+
+    lines.append("\n⚠️ <i>Миқдорлар тахминий — дорихонада аниқлаштиринг.</i>")
+
+    # Telegramda xabar uzun bo'lsa bo'lib yuboramiz
+    text = "\n".join(lines)
+    if len(text) > 4000:
+        mid = len(lines) // 2
+        await callback.message.answer("\n".join(lines[:mid]), parse_mode="HTML")
+        await callback.message.answer("\n".join(lines[mid:]), parse_mode="HTML")
+    else:
+        await callback.message.answer(text, parse_mode="HTML")

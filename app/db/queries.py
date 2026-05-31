@@ -155,3 +155,11 @@ async def get_history(session: AsyncSession, patient_id: int, limit: int = 40):
         .limit(limit)
     )
     return result.all()
+
+
+async def get_all_meds(session: AsyncSession, patient_id: int) -> List[Medication]:
+    result = await session.execute(
+        select(Medication).where(Medication.patient_id == patient_id)
+        .order_by(Medication.start_day, Medication.time_slot)
+    )
+    return result.scalars().all()
