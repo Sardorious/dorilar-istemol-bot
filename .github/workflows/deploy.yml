@@ -52,21 +52,16 @@ jobs:
             echo "Pulling latest code..."
             git pull origin main
 
-            echo "Creating .env from secrets..."
-            cat > .env << 'ENVEOF'
+            echo "Creating .env..."
+            cat > .env << ENVEOF
             BOT_TOKEN=${{ secrets.BOT_TOKEN }}
-            DATABASE_URL=postgresql+asyncpg://botuser:botpassword@db:5432/dorilar_bot
+            DATABASE_URL=sqlite+aiosqlite:///./data/dorilar.db
             ADMIN_IDS=${{ secrets.ADMIN_IDS }}
             TZ=Asia/Tashkent
             ENVEOF
 
-            echo "Building and restarting containers..."
-            docker compose pull db
+            echo "Building and restarting..."
             docker compose build bot
             docker compose up -d --remove-orphans
 
-            echo "Waiting for health check..."
-            sleep 5
-            docker compose ps
-
-            echo "Deployed successfully!"
+            echo "Done!"

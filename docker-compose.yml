@@ -5,27 +5,7 @@ services:
     build: .
     restart: always
     env_file: .env
-    depends_on:
-      db:
-        condition: service_healthy
     volumes:
+      - ./data:/app/data
       - ./logs:/app/logs
 
-  db:
-    image: postgres:16-alpine
-    restart: always
-    env_file: .env
-    environment:
-      POSTGRES_DB: dorilar_bot
-      POSTGRES_USER: botuser
-      POSTGRES_PASSWORD: botpassword
-    volumes:
-      - pg_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U botuser -d dorilar_bot"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
-volumes:
-  pg_data:
