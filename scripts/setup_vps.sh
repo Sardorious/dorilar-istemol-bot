@@ -1,12 +1,12 @@
 #!/bin/bash
-# VPS setup script — run once on fresh Ubuntu 22.04/24.04 server
+# VPS setup script — Ubuntu 22.04/24.04 da bir marta ishga tushiring
 # Usage: bash scripts/setup_vps.sh
 
 set -e
 
-echo "=== Installing Docker ==="
+echo "=== Docker o'rnatilmoqda ==="
 apt-get update
-apt-get install -y ca-certificates curl gnupg
+apt-get install -y ca-certificates curl gnupg git
 install -m 0755 -d /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
 chmod a+r /etc/apt/keyrings/docker.gpg
@@ -14,20 +14,19 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.
 apt-get update
 apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
-echo "=== Setting up project directory ==="
-mkdir -p /opt/dorilar-bot
-cd /opt/dorilar-bot
+echo "=== Loyiha papkasi tayyorlanmoqda ==="
+mkdir -p ~/dorilar-bot
+cd ~/dorilar-bot
 
-echo "=== Cloning repo ==="
+echo "=== Repo clone qilinmoqda ==="
 git clone https://github.com/Sardorious/dorilar-istemol-bot.git .
 
-echo "=== Creating .env (fill in values!) ==="
+echo "=== .env yaratilmoqda ==="
 cp .env.example .env
 echo ""
-echo "IMPORTANT: Edit /opt/dorilar-bot/.env with your values:"
+echo "MUHIM: ~/dorilar-bot/.env faylini to'ldiring:"
 echo "  BOT_TOKEN=your_bot_token"
 echo "  ADMIN_IDS=your_telegram_id"
 echo ""
-
-echo "=== Done! After editing .env, run: ==="
-echo "  cd /opt/dorilar-bot && docker compose up -d"
+echo "=== Tayyor! .env to'ldirilgandan keyin ==="
+echo "  cd ~/dorilar-bot && docker compose up -d"
