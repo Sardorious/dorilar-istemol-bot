@@ -3,8 +3,6 @@ from datetime import datetime, timedelta
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.date import DateTrigger
 from aiogram import Bot
-from app.db.engine import AsyncSessionLocal
-from app.db import queries as q
 from app.bot.keyboards import dose_keyboard
 
 logger = logging.getLogger(__name__)
@@ -14,16 +12,16 @@ scheduler = AsyncIOScheduler(timezone="Asia/Tashkent")
 def start_scheduler():
     if not scheduler.running:
         scheduler.start()
-        logger.info("Scheduler started")
+        logger.info("Scheduler ishga tushdi")
 
 
 async def send_reminder(bot: Bot, telegram_id: int, dose_log_id: int, med_name: str, dose: str):
     try:
         text = (
-            f"💊 <b>Dori vaqti!</b>\n\n"
+            f"💊 <b>Дори вақти!</b>\n\n"
             f"<b>{med_name}</b>\n"
-            f"Miqdor: {dose}\n\n"
-            f"Iste'mol qildingizmi?"
+            f"Миқдор: {dose}\n\n"
+            f"Истеъмол қилдингизми?"
         )
         await bot.send_message(
             chat_id=telegram_id,
@@ -32,7 +30,7 @@ async def send_reminder(bot: Bot, telegram_id: int, dose_log_id: int, med_name: 
             reply_markup=dose_keyboard(dose_log_id)
         )
     except Exception as e:
-        logger.error(f"Failed to send reminder to {telegram_id}: {e}")
+        logger.error(f"Эслатма юборишда хатолик {telegram_id}: {e}")
 
 
 def schedule_reminder(
@@ -52,7 +50,7 @@ def schedule_reminder(
         replace_existing=True,
         misfire_grace_time=300
     )
-    logger.info(f"Scheduled reminder job {job_id} at {run_at}")
+    logger.info(f"Эслатма режалаштирилди: {job_id} — {run_at}")
 
 
 def schedule_snooze(

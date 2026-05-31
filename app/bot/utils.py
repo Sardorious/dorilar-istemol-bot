@@ -11,38 +11,38 @@ def get_treatment_day(patient: Patient) -> int:
 
 def format_time_slot(slot: str) -> str:
     slots = {
-        "morning": "🌅 Bomdod (05:30–07:00)",
-        "before_breakfast": "🕖 Nonushta oldin (07:00–07:30)",
-        "breakfast": "🍽 Nonushta vaqtida (07:30–08:00)",
-        "afternoon": "☀️ Tushlik (13:00)",
-        "before_dinner": "🕔 Kechki ovqat oldin (17:00–18:00)",
-        "dinner": "🍲 Kechki ovqat (19:00)",
-        "evening": "🌙 Kechqurun (20:00)",
-        "night": "😴 Uxlash oldin (21:00+)",
-        "injection": "💉 Kapelnitsa (kun 1-yarmi)",
-        "im": "💉 Mushak ichiga (kechqurun)",
+        "morning":          "🌅 Бомдод вақтида (05:30)",
+        "before_breakfast": "🕖 Нонушта олдин (07:00–07:30)",
+        "breakfast":        "🍽 Нонушта вақтида (07:30–08:00)",
+        "afternoon":        "☀️ Тушлик вақтида (13:00)",
+        "before_dinner":    "🕔 Кечки овқат олдин (17:00–18:00)",
+        "dinner":           "🍲 Кечки овқат вақтида (19:00)",
+        "evening":          "🌙 Кечқурун овқатдан кейин (20:00)",
+        "night":            "😴 Ухлаш олдин (21:00+)",
+        "injection":        "💉 Капельница (кун 1-ярмида, тук қоринга)",
+        "im":               "💉 Мушак ичига (кечқурун)",
     }
     return slots.get(slot, slot)
 
 
 def format_status(status: str) -> str:
     return {
-        "taken": "✅ Iste'mol qilindi",
-        "skipped": "❌ O'tkazib yuborildi",
-        "snoozed": "⏰ Keyinga qoldirildi",
-        "pending": "💊 Kutilmoqda",
+        "taken":   "✅ Истеъмол қилинди",
+        "skipped": "❌ Ўтказиб юборилди",
+        "snoozed": "⏰ Кейинга қолдирилди",
+        "pending": "💊 Кутилмоқда",
     }.get(status, status)
 
 
 def build_day_summary(day: int, meds_with_logs: list) -> str:
     if not meds_with_logs:
-        return f"📅 <b>{day}-kun</b>\n\nBu kunda dori yo'q."
+        return f"📅 <b>{day}-кун</b>\n\nБу кунда дори йўқ."
 
     taken = sum(1 for _, l in meds_with_logs if l and l.status == "taken")
     total = len(meds_with_logs)
 
-    lines = [f"📅 <b>{day}-kun — Dorilar ro'yxati</b>\n"]
-    lines.append(f"✅ {taken}/{total} iste'mol qilindi\n")
+    lines = [f"📅 <b>{day}-кун — Дориlar рўйхати</b>\n"]
+    lines.append(f"✅ {taken}/{total} истеъмол қилинди\n")
 
     current_slot = None
     for med, log in meds_with_logs:
@@ -55,6 +55,6 @@ def build_day_summary(day: int, meds_with_logs: list) -> str:
         )
         lines.append(f"{status_icon} {med.name} — {med.dose}")
         if med.note:
-            lines.append(f"   <i>{med.note[:80]}</i>")
+            lines.append(f"   <i>{med.note[:100]}</i>")
 
     return "\n".join(lines)

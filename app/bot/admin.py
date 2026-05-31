@@ -16,29 +16,29 @@ logger = logging.getLogger(__name__)
 router = Router()
 
 TIME_SLOTS = [
-    ("morning", "Bomdod 05:30"),
-    ("before_breakfast", "Nonushta oldin 07:00"),
-    ("breakfast", "Nonushta vaqtida 07:30"),
-    ("afternoon", "Tushlik 13:00"),
-    ("before_dinner", "Kechki ovqat oldin 17:00"),
-    ("dinner", "Kechki ovqat 19:00"),
-    ("evening", "Kechqurun 20:00"),
-    ("night", "Uxlash oldin 21:00"),
-    ("injection", "Kapelnitsa"),
-    ("im", "Mushak ichiga"),
+    ("morning",          "Бомдод 05:30"),
+    ("before_breakfast", "Нонушта олдин 07:00"),
+    ("breakfast",        "Нонушта вақтида 07:30"),
+    ("afternoon",        "Тушлик 13:00"),
+    ("before_dinner",    "Кечки овқат олдин 17:00"),
+    ("dinner",           "Кечки овқат 19:00"),
+    ("evening",          "Кечқурун 20:00"),
+    ("night",            "Ухлаш олдин 21:00"),
+    ("injection",        "Капельница"),
+    ("im",               "Мушак ичига"),
 ]
 
 REMINDER_TIMES = {
-    "morning": (5, 30),
-    "before_breakfast": (7, 0),
-    "breakfast": (7, 30),
-    "afternoon": (13, 0),
-    "before_dinner": (17, 0),
-    "dinner": (19, 0),
-    "evening": (20, 0),
-    "night": (21, 0),
-    "injection": (9, 0),
-    "im": (19, 30),
+    "morning":          (5,  30),
+    "before_breakfast": (7,  0),
+    "breakfast":        (7,  30),
+    "afternoon":        (13, 0),
+    "before_dinner":    (17, 0),
+    "dinner":           (19, 0),
+    "evening":          (20, 0),
+    "night":            (21, 0),
+    "injection":        (9,  0),
+    "im":               (19, 30),
 }
 
 
@@ -49,20 +49,20 @@ def is_admin(user_id: int) -> bool:
 @router.message(Command("admin"))
 async def cmd_admin(message: Message):
     if not is_admin(message.from_user.id):
-        await message.answer("❌ Ruxsat yo'q.")
+        await message.answer("❌ Рухсат йўқ.")
         return
-    await message.answer("👨‍⚕️ Admin panel:", reply_markup=admin_keyboard())
+    await message.answer("👨‍⚕️ Админ панел:", reply_markup=admin_keyboard())
 
 
 @router.callback_query(F.data == "admin_add_patient")
 async def cb_add_patient(callback: CallbackQuery, state: FSMContext):
     if not is_admin(callback.from_user.id):
-        await callback.answer("❌ Ruxsat yo'q", show_alert=True)
+        await callback.answer("❌ Рухсат йўқ", show_alert=True)
         return
     await state.set_state(AdminStates.waiting_for_patient_code)
     await callback.message.answer(
-        "Yangi bemor qo'shish:\n\n"
-        "Bemor kodini kiriting (masalan: BEMOR-001):"
+        "Янги бемор қўшиш:\n\n"
+        "Бемор кодини киритинг (масалан: BEMOR-001):"
     )
     await callback.answer()
 
@@ -73,11 +73,11 @@ async def process_admin_code(message: Message, state: FSMContext):
     async with AsyncSessionLocal() as session:
         existing = await q.get_patient_by_code(session, code)
     if existing:
-        await message.answer(f"❌ '{code}' kodi allaqachon mavjud. Boshqa kod kiriting:")
+        await message.answer(f"❌ '{code}' коди аллақачон мавжуд. Бошқа код киритинг:")
         return
     await state.update_data(code=code)
     await state.set_state(AdminStates.waiting_for_patient_name)
-    await message.answer("Bemor to'liq ismini kiriting:")
+    await message.answer("Бемор тўлиқ исмини киритинг:")
 
 
 @router.message(AdminStates.waiting_for_patient_name)
@@ -85,32 +85,31 @@ async def process_admin_name(message: Message, state: FSMContext):
     await state.update_data(full_name=message.text.strip())
     await state.set_state(AdminStates.waiting_for_start_date)
     await message.answer(
-        "Davolanish boshlanish sanasini kiriting (KK.OO.YYYY):\n"
-        "Masalan: 01.06.2025\n\n"
-        "Bugun uchun 'bugun' yozing."
+        "Даволаниш бошланиш санасини киритинг (КК.ОО.ЙЙЙЙ):\n"
+        "Масалан: 01.05.2026\n\n"
+        "Бугун учун «бугун» ёзинг."
     )
 
 
 @router.message(AdminStates.waiting_for_start_date)
 async def process_admin_date(message: Message, state: FSMContext):
     text = message.text.strip().lower()
-    if text in ("bugun", "today"):
+    if text in ("бугун", "bugun", "today"):
         start_date = datetime.now()
     else:
         try:
             start_date = datetime.strptime(text, "%d.%m.%Y")
         except ValueError:
-            await message.answer("❌ Noto'g'ri format. KK.OO.YYYY ko'rinishida kiriting:")
+            await message.answer("❌ Нотўғри формат. КК.ОО.ЙЙЙЙ кўринишида киритинг:")
             return
     await state.update_data(start_date=start_date)
     await state.set_state(AdminStates.waiting_for_notes)
-    await message.answer("Izoh (ixtiyoriy, o'tkazib yuborish uchun '-' yozing):")
+    await message.answer("Изоҳ (ихтиёрий, ўтказиб юбориш учун «-» ёзинг):")
 
 
 @router.message(AdminStates.waiting_for_notes)
 async def process_admin_notes(message: Message, state: FSMContext):
     notes = "" if message.text.strip() == "-" else message.text.strip()
-    await state.update_data(notes=notes)
     data = await state.get_data()
 
     async with AsyncSessionLocal() as session:
@@ -123,22 +122,18 @@ async def process_admin_notes(message: Message, state: FSMContext):
         )
 
     await state.update_data(patient_id=patient.id)
-    await message.answer(
-        f"✅ Bemor yaratildi!\n\n"
-        f"Kod: <b>{patient.patient_code}</b>\n"
-        f"Ism: {patient.full_name}\n\n"
-        f"Endi dorilarni qo'shish uchun /add_med_{patient.id} buyrug'ini yuboring.\n"
-        f"Yoki quyidagi ko'rsatmani bajaring:",
-        parse_mode="HTML"
-    )
     await state.clear()
 
     builder = InlineKeyboardBuilder()
-    builder.button(text="➕ Dori qo'shish", callback_data=f"add_med:{patient.id}")
-    builder.button(text="📋 Standart resept yuklash", callback_data=f"load_default:{patient.id}")
+    builder.button(text="📋 Стандарт рецепт юклаш", callback_data=f"load_default:{patient.id}")
+    builder.button(text="➕ Дори қўшиш",             callback_data=f"add_med:{patient.id}")
     builder.adjust(1)
     await message.answer(
-        "Nima qilmoqchisiz?",
+        f"✅ Бемор яратилди!\n\n"
+        f"Код: <b>{patient.patient_code}</b>\n"
+        f"Исм: {patient.full_name}\n\n"
+        f"Нима қилмоқчисиз?",
+        parse_mode="HTML",
         reply_markup=builder.as_markup()
     )
 
@@ -146,10 +141,10 @@ async def process_admin_notes(message: Message, state: FSMContext):
 @router.callback_query(F.data.startswith("load_default:"))
 async def cb_load_default(callback: CallbackQuery):
     if not is_admin(callback.from_user.id):
-        await callback.answer("❌ Ruxsat yo'q", show_alert=True)
+        await callback.answer("❌ Рухсат йўқ", show_alert=True)
         return
     patient_id = int(callback.data.split(":")[1])
-    await callback.answer("Yuklanmoqda...", show_alert=False)
+    await callback.answer("Юкланмоқда...", show_alert=False)
 
     from app.bot.default_recipe import DEFAULT_MEDS, DAILY_NOTES, DIET_NOTE, PURCHASE_NOTE, PATIENT_META
     async with AsyncSessionLocal() as session:
@@ -186,12 +181,12 @@ async def cb_load_default(callback: CallbackQuery):
 @router.callback_query(F.data.startswith("add_med:"))
 async def cb_add_med(callback: CallbackQuery, state: FSMContext):
     if not is_admin(callback.from_user.id):
-        await callback.answer("❌ Ruxsat yo'q", show_alert=True)
+        await callback.answer("❌ Рухсат йўқ", show_alert=True)
         return
     patient_id = int(callback.data.split(":")[1])
     await state.update_data(patient_id=patient_id)
     await state.set_state(AdminStates.adding_med_name)
-    await callback.message.answer("Dori nomini kiriting:")
+    await callback.message.answer("Дори номини киритинг:")
     await callback.answer()
 
 
@@ -199,7 +194,7 @@ async def cb_add_med(callback: CallbackQuery, state: FSMContext):
 async def process_med_name(message: Message, state: FSMContext):
     await state.update_data(med_name=message.text.strip())
     await state.set_state(AdminStates.adding_med_dose)
-    await message.answer("Miqdorini kiriting (masalan: 1 ta, 2 kapsul, 5 g):")
+    await message.answer("Миқдорини киритинг (масалан: 1 та, 2 капсул, 5 г):")
 
 
 @router.message(AdminStates.adding_med_dose)
@@ -211,7 +206,7 @@ async def process_med_dose(message: Message, state: FSMContext):
     for slot, label in TIME_SLOTS:
         builder.button(text=label, callback_data=f"slot:{slot}")
     builder.adjust(2)
-    await message.answer("Qaysi vaqtda?", reply_markup=builder.as_markup())
+    await message.answer("Қайси вақтда?", reply_markup=builder.as_markup())
 
 
 @router.callback_query(F.data.startswith("slot:"), AdminStates.adding_med_time_slot)
@@ -219,7 +214,7 @@ async def process_slot(callback: CallbackQuery, state: FSMContext):
     slot = callback.data.split(":")[1]
     await state.update_data(time_slot=slot)
     await state.set_state(AdminStates.adding_med_start_day)
-    await callback.message.answer("Necha-kundan boshlanadi? (masalan: 1):")
+    await callback.message.answer("Неча-кундан бошланади? (масалан: 1):")
     await callback.answer()
 
 
@@ -228,11 +223,11 @@ async def process_start_day(message: Message, state: FSMContext):
     try:
         start_day = int(message.text.strip())
     except ValueError:
-        await message.answer("❌ Raqam kiriting:")
+        await message.answer("❌ Рақам киритинг:")
         return
     await state.update_data(start_day=start_day)
     await state.set_state(AdminStates.adding_med_end_day)
-    await message.answer("Necha-kungacha? (masalan: 30, yoki 365 — 1 yil):")
+    await message.answer("Неча-кунгача? (масалан: 30, ёки 365 — 1 йил):")
 
 
 @router.message(AdminStates.adding_med_end_day)
@@ -240,17 +235,15 @@ async def process_end_day(message: Message, state: FSMContext):
     try:
         end_day = int(message.text.strip())
     except ValueError:
-        await message.answer("❌ Raqam kiriting:")
+        await message.answer("❌ Рақам киритинг:")
         return
 
     data = await state.get_data()
     slot = data.get("time_slot", "breakfast")
     rh, rm = REMINDER_TIMES.get(slot, (None, None))
+    slot_labels = dict(TIME_SLOTS)
 
     async with AsyncSessionLocal() as session:
-        from sqlalchemy import select
-        from app.db.models import Medication
-        slot_labels = dict(TIME_SLOTS)
         await q.add_medication(
             session,
             patient_id=data["patient_id"],
@@ -267,11 +260,11 @@ async def process_end_day(message: Message, state: FSMContext):
 
     await state.clear()
     builder = InlineKeyboardBuilder()
-    builder.button(text="➕ Yana dori qo'shish", callback_data=f"add_med:{data['patient_id']}")
-    builder.button(text="✅ Tayyor", callback_data="admin_done")
+    builder.button(text="➕ Яна дори қўшиш", callback_data=f"add_med:{data['patient_id']}")
+    builder.button(text="✅ Тайёр",           callback_data="admin_done")
     builder.adjust(1)
     await message.answer(
-        f"✅ <b>{data['med_name']}</b> qo'shildi!",
+        f"✅ <b>{data['med_name']}</b> қўшилди!",
         parse_mode="HTML",
         reply_markup=builder.as_markup()
     )
@@ -279,14 +272,14 @@ async def process_end_day(message: Message, state: FSMContext):
 
 @router.callback_query(F.data == "admin_done")
 async def cb_admin_done(callback: CallbackQuery):
-    await callback.message.answer("✅ Barcha dorilar saqlandi!", reply_markup=admin_keyboard())
+    await callback.message.answer("✅ Барча дориlar сақланди!", reply_markup=admin_keyboard())
     await callback.answer()
 
 
 @router.callback_query(F.data == "admin_list_patients")
 async def cb_list_patients(callback: CallbackQuery):
     if not is_admin(callback.from_user.id):
-        await callback.answer("❌ Ruxsat yo'q", show_alert=True)
+        await callback.answer("❌ Рухсат йўқ", show_alert=True)
         return
     async with AsyncSessionLocal() as session:
         from sqlalchemy import select
@@ -297,11 +290,11 @@ async def cb_list_patients(callback: CallbackQuery):
         patients = result.scalars().all()
 
     if not patients:
-        await callback.message.answer("Hali bemor yo'q.")
+        await callback.message.answer("Ҳали бемор йўқ.")
         await callback.answer()
         return
 
-    lines = ["👥 <b>Bemorlar ro'yxati:</b>\n"]
+    lines = ["👥 <b>Беморлар рўйхати:</b>\n"]
     for p in patients:
         linked = "🔗" if p.telegram_id else "⭕"
         lines.append(f"{linked} <code>{p.patient_code}</code> — {p.full_name}")
