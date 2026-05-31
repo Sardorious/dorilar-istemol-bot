@@ -61,7 +61,7 @@ jobs:
             ENVEOF
 
             echo "Building and restarting..."
-            docker compose build bot
-            docker compose up -d --remove-orphans
+            docker-compose build bot
+            docker-compose up -d --remove-orphans
 
             echo "Done!"
