@@ -47,7 +47,7 @@ jobs:
           port: ${{ secrets.VPS_PORT || 22 }}
           script: |
             set -e
-            cd /opt/dorilar-bot
+            cd ~/dorilar-bot
 
             echo "Pulling latest code..."
             git pull origin main
