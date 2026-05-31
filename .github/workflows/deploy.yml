@@ -47,6 +47,10 @@ jobs:
           port: ${{ secrets.VPS_PORT || 22 }}
           script: |
             set -e
+
+            echo "Stopping and removing old container..."
+            docker rm -f dorilar-bot_bot_1 2>/dev/null || true
+
             cd ~/dorilar-bot
 
             echo "Pulling latest code..."
@@ -60,9 +64,6 @@ jobs:
             ADMIN_IDS=${{ secrets.ADMIN_IDS }}
             TZ=Asia/Tashkent
             ENVEOF
-
-            echo "Resetting database..."
-            rm -f ./data/dorilar.db
 
             echo "Building and restarting..."
             docker-compose build bot
