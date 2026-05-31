@@ -1,5 +1,5 @@
-from aiogram.types import InlineKeyboardMarkup
-from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.types import InlineKeyboardMarkup, ReplyKeyboardMarkup
+from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 
 
 def dose_keyboard(dose_log_id: int) -> InlineKeyboardMarkup:
@@ -46,15 +46,15 @@ def day_meds_keyboard(meds_with_logs: list) -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def main_menu_keyboard() -> InlineKeyboardMarkup:
-    builder = InlineKeyboardBuilder()
-    builder.button(text="🗓 Бугунги дориlar",  callback_data="today")
-    builder.button(text="📅 Календар",          callback_data="show_calendar")
-    builder.button(text="📋 Тарих",             callback_data="history")
-    builder.button(text="🛒 Харид рўйхати",       callback_data="shopping_list")
-    builder.button(text="📂 Рецептларим",       callback_data="my_patients")
-    builder.adjust(1)
-    return builder.as_markup()
+def main_menu_keyboard() -> ReplyKeyboardMarkup:
+    builder = ReplyKeyboardBuilder()
+    builder.button(text="🗓 Бугунги дорилар")
+    builder.button(text="📅 Календар")
+    builder.button(text="📋 Тарих")
+    builder.button(text="🛒 Харид рўйхати")
+    builder.button(text="📂 Рецептларим")
+    builder.adjust(2, 2, 1)
+    return builder.as_markup(resize_keyboard=True)
 
 
 def patients_list_keyboard(patients: list) -> InlineKeyboardMarkup:
