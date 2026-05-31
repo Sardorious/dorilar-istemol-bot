@@ -61,6 +61,9 @@ jobs:
             TZ=Asia/Tashkent
             ENVEOF
 
+            echo "Resetting database..."
+            rm -f ./data/dorilar.db
+
             echo "Building and restarting..."
             docker-compose build bot
             docker-compose up -d --remove-orphans
