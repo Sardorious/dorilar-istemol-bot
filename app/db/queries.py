@@ -1,20 +1,20 @@
 from datetime import datetime, timedelta
 from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, update
+from sqlalchemy import select, update
 from app.db.models import Patient, Medication, DoseLog, ReminderJob
 
 
 async def get_patient_by_code(session: AsyncSession, code: str) -> Optional[Patient]:
     result = await session.execute(
-        select(Patient).where(Patient.patient_code == code, Patient.is_active == True)
+        select(Patient).where(Patient.patient_code == code, Patient.is_active)
     )
     return result.scalar_one_or_none()
 
 
 async def get_patient_by_telegram_id(session: AsyncSession, tg_id: int) -> Optional[Patient]:
     result = await session.execute(
-        select(Patient).where(Patient.telegram_id == tg_id, Patient.is_active == True)
+        select(Patient).where(Patient.telegram_id == tg_id, Patient.is_active)
     )
     return result.scalar_one_or_none()
 

@@ -1,11 +1,11 @@
 import logging
-from datetime import datetime, date, timedelta
+from datetime import datetime, date
 from aiogram import Bot
 from app.db.engine import AsyncSessionLocal
 from app.db import queries as q
 from app.scheduler.jobs import schedule_reminder
 from sqlalchemy import select
-from app.db.models import Patient, Medication
+from app.db.models import Patient
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +15,7 @@ async def schedule_daily_reminders(bot: Bot):
     today = date.today()
     async with AsyncSessionLocal() as session:
         result = await session.execute(
-            select(Patient).where(Patient.is_active == True, Patient.telegram_id.isnot(None))
+            select(Patient).where(Patient.is_active, Patient.telegram_id.isnot(None))
         )
         patients = result.scalars().all()
 

@@ -1,5 +1,4 @@
 import logging
-from datetime import datetime
 from aiogram import Router, F, Bot
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
@@ -106,7 +105,7 @@ async def cb_show_calendar(callback: CallbackQuery):
         max_day = result.scalar() or 30
 
     await callback.message.answer(
-        f"🗓 <b>Даволаниш календари</b>\n\nКунни танланг:",
+        "🗓 <b>Даволаниш календари</b>\n\nКунни танланг:",
         parse_mode="HTML",
         reply_markup=calendar_keyboard(min(max_day, 150), current_day)
     )

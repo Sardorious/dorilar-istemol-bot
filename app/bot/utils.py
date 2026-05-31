@@ -1,4 +1,4 @@
-from datetime import datetime, date
+from datetime import date
 from app.db.models import Patient
 
 
@@ -38,7 +38,7 @@ def build_day_summary(day: int, meds_with_logs: list) -> str:
     if not meds_with_logs:
         return f"📅 <b>{day}-кун</b>\n\nБу кунда дори йўқ."
 
-    taken = sum(1 for _, l in meds_with_logs if l and l.status == "taken")
+    taken = sum(1 for _, log_item in meds_with_logs if log_item and log_item.status == "taken")
     total = len(meds_with_logs)
 
     lines = [f"📅 <b>{day}-кун — Дориlar рўйхати</b>\n"]

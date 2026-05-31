@@ -285,7 +285,7 @@ async def cb_list_patients(callback: CallbackQuery):
         from sqlalchemy import select
         from app.db.models import Patient
         result = await session.execute(
-            select(Patient).where(Patient.is_active == True).order_by(Patient.created_at.desc())
+            select(Patient).where(Patient.is_active).order_by(Patient.created_at.desc())
         )
         patients = result.scalars().all()
 
