@@ -1,275 +1,404 @@
+# Муминова Нилюфар 1991 йил вип — Май ойи 2026 йил
+# PDF дан айнан кўчирилган
+
+PATIENT_META = {
+    "full_name": "Муминова Нилюфар",
+    "birth_year": 1991,
+    "diagnosis": (
+        "Диффуз зоб 1 степени эутериоз c аутоимунным компонентом. "
+        "Гипоацидность. СИГР. Гипергомоцистеинэмия. Метаболический ацидоз. "
+        "Инсулинорезистентность. Дефицит витаминов группы В, Дефицит витамина Д."
+    ),
+}
+
+# time_slot қийматлари:
+#   morning         — бомдод (05:30)
+#   before_breakfast — нонушта олдин (07:00–07:30)
+#   breakfast       — нонушта вақтида (07:30–08:00)
+#   afternoon       — тушлик (13:00)
+#   before_dinner   — кечки овқат олдин (17:00–18:00)
+#   dinner          — кечки овқат (19:00)
+#   evening         — кечқурун овқатдан кейин (20:00)
+#   night           — ухлаш олдин (21:00+)
+#   injection       — капельница (кун 1-ярмида, тук қоринга)
+#   im              — мушак ичига (кечқурун)
+
 DEFAULT_MEDS = [
-    # --- 1-KUN ---
+
+    # ── 1-КУН ──────────────────────────────────────────────────────────────
+
     {
-        "name": "Sho'rot rastoropshy",
-        "dose": "1 osh qoshiq + 1 stakan issiq suv",
-        "note": "1 oy",
-        "time_slot": "morning",
-        "time_label": "Bomdod (05:30)",
-        "start_day": 1,
-        "end_day": 30,
-    },
-    {
-        "name": "Bleymaren",
-        "dose": "1 tab → 0.5 litr suvda eritib huplayib",
-        "note": "17:00 gacha tugatiladi. Ertalabki siydik pH ≥6.5 bo'lsa o'sha kuni ichilmaydi.",
-        "time_slot": "morning",
-        "time_label": "Bomdod (05:30)",
-        "start_day": 1,
-        "end_day": 120,
-    },
-    {
-        "name": "Kolostruum + Metabiotik Anagran",
-        "dose": "1 marta, surtish",
-        "note": "Ovqatdan 1 soat oldin, 4 oy",
-        "time_slot": "before_breakfast",
-        "time_label": "Nonushta oldin 1 soat (07:00)",
-        "start_day": 1,
-        "end_day": 120,
-    },
-    {
-        "name": "Metafungin Anagran",
-        "dose": "1 ta",
-        "note": "1 oy",
+        "name": "Метафунгин Анагран",
+        "dose": "1*1 мах ов вактида эрталаб",
+        "note": "1 ой",
         "time_slot": "breakfast",
-        "time_label": "Nonushta vaqtida (07:30)",
+        "time_label": "Нонушта вақтида эрталаб",
         "start_day": 1,
         "end_day": 30,
     },
     {
         "name": "Lypo Gold",
-        "dose": "2 ta × 3 mahal (nonushta, tushlik, kechki ovqat)",
-        "note": "4 oy",
+        "dose": "2 та — нонушта вақтида",
+        "note": "4 ой, 3 махал овқат вақтида",
         "time_slot": "breakfast",
-        "time_label": "Nonushta vaqtida (07:30)",
+        "time_label": "Нонушта вақтида",
         "start_day": 1,
         "end_day": 120,
     },
     {
-        "name": "Lypo Gold (tushlik)",
-        "dose": "2 ta",
-        "note": "4 oy",
+        "name": "Lypo Gold",
+        "dose": "2 та — тушлик вақтида",
+        "note": "4 ой, 3 махал овқат вақтида",
         "time_slot": "afternoon",
-        "time_label": "Tushlik (13:00)",
+        "time_label": "Тушлик вақтида",
         "start_day": 1,
         "end_day": 120,
     },
     {
-        "name": "Lypo Gold (kechki ovqat)",
-        "dose": "2 ta",
-        "note": "4 oy",
+        "name": "Lypo Gold",
+        "dose": "2 та — кечки овқат вақтида",
+        "note": "4 ой, 3 махал овқат вақтида",
         "time_slot": "dinner",
-        "time_label": "Kechki ovqat (19:00)",
+        "time_label": "Кечки овқат вақтида",
         "start_day": 1,
         "end_day": 120,
     },
     {
-        "name": "Levotsetirizin 5 mg",
-        "dose": "1 ta",
-        "note": "Ovqatdan keyin, 5 oy",
+        "name": "Колострум + Метабиотик Анагран",
+        "dose": "1 мах овқатдан 1 соат олдин суришга",
+        "note": "4 ой",
+        "time_slot": "before_breakfast",
+        "time_label": "Овқатдан 1 соат олдин",
+        "start_day": 1,
+        "end_day": 120,
+    },
+    {
+        "name": "Блемарен",
+        "dose": "1 таб 0.5 литр сувга эритиб, соат 17:00 гача хуплаб-хуплаб ичиш",
+        "note": (
+            "рН-полоскада тонги 1-чи сийдикни ўлчаб бориш. "
+            "Эрталабки сийдик рН 6,5 дан ортиб кетган куни ичилмайди. "
+            "4 ой давомида кузатиб борасиз — паст чиқса ичиб юрасиз."
+        ),
+        "time_slot": "morning",
+        "time_label": "Бомдод — соат 17:00 гача тугатилади",
+        "start_day": 1,
+        "end_day": 120,
+    },
+    {
+        "name": "Шрот расторопши",
+        "dose": "1 ош қош 1 стакан иссиқ сув билан",
+        "note": "Эрталаб бомдод вақтида, 1 ой",
+        "time_slot": "morning",
+        "time_label": "Бомдод вақтида",
+        "start_day": 1,
+        "end_day": 30,
+    },
+    {
+        "name": "Левоцетиризин 5 мг",
+        "dose": "1 та",
+        "note": "Кечқурун овқатдан кейин, 5 ой",
         "time_slot": "evening",
-        "time_label": "Kechqurun ovqatdan keyin (20:00)",
+        "time_label": "Кечқурун овқатдан кейин",
         "start_day": 1,
         "end_day": 150,
     },
     {
-        "name": "Gallavit svechi 50 mg",
-        "dose": "1 ta (orqa)",
-        "note": "2 marta/kun, 20 kun ich + 10 kun dam. 4 oy sikl",
+        "name": "Галавит Свеча 50 мг",
+        "dose": "2 мах орқа пешобга",
+        "note": "20 кун + 10 кун дам — 4 ой курс",
         "time_slot": "before_dinner",
-        "time_label": "Kechki ovqat oldin (17:00)",
+        "time_label": "Кечки овқат олдин (орқа пешобга)",
         "start_day": 1,
         "end_day": 120,
     },
-    # Kapelnitsa 1-10 kun
+
+    # ── КАПЕЛЬНИЦАЛАР 1-КУН ─────────────────────────────────────────────────
+
     {
-        "name": "Kokarbakosilaza 50 mg (kapelnitsa)",
-        "dose": "t.i.",
-        "note": "Kapelnitsa, kun 1-yarmi, tuk qoringa, shifokor nazoratida",
+        "name": "Кокарбаксилаза 50 мг",
+        "dose": "т.и",
+        "note": "Капельница, 10 кун. Кун 1-ярмида, тук қоринга, врач назоратида.",
         "time_slot": "injection",
-        "time_label": "Kapelnitsa (09:00)",
+        "time_label": "Капельница (кун 1-ярмида)",
         "start_day": 1,
         "end_day": 10,
     },
     {
-        "name": "Riboflavin 1.0 (kapelnitsa)",
-        "dose": "m.o.",
-        "note": "Kapelnitsa, kechqurun, 10 kun",
+        "name": "Рибофлавин 1.0",
+        "dose": "м.о",
+        "note": "Капельница, 10 кун, кечқурун",
         "time_slot": "injection",
-        "time_label": "Kapelnitsa (09:00)",
+        "time_label": "Капельница (кечқурун)",
         "start_day": 1,
         "end_day": 10,
     },
     {
-        "name": "L-Lizin Estsinat + Natriy tiosulfat + Kalsiy glyukonat + Vit C (kap.)",
-        "dose": "Kapelnitsa sxemasi bo'yicha",
-        "note": "1, 2, 3-kunlari t.i.",
+        "name": "Л-Лизин Эсцинат 10мл + Натрий хлор 0,9%-100,0 → Натрий тиосульфат 30%-10,0 + Натрий хлор 0,9-100мл → Кальций глюконат 5,0 + Натрий хлор 0,9-15,0 → Витамин С 5%-2,0 + натрий хлор 0,9%-3,0",
+        "dose": "т.и",
+        "note": "1-2-3-кунлари",
         "time_slot": "injection",
-        "time_label": "Kapelnitsa (09:00)",
+        "time_label": "Капельница (кун 1-ярмида)",
         "start_day": 1,
         "end_day": 3,
     },
-    # --- 2-KUN ---
+
+    # ── 2-КУН ──────────────────────────────────────────────────────────────
+
     {
-        "name": "Molibden 500 mkg (Seeking Health)",
-        "dose": "1 ta",
-        "note": "Ovqatdan keyin, kechqurun, 4 oy",
+        "name": "Молибден 500 мкг (Seeking Health)",
+        "dose": "1*1 мах овқ кейин",
+        "note": "Кечқурун, 4 ой",
         "time_slot": "evening",
-        "time_label": "Kechqurun ovqatdan keyin (20:00)",
+        "time_label": "Кечқурун овқатдан кейин",
         "start_day": 2,
         "end_day": 120,
     },
     {
-        "name": "Tsink Karnozin (Dr.Best / Life Extension)",
-        "dose": "2 ta",
-        "note": "Ovqatdan 40 daqiqa oldin, ertalab, 5 oy",
+        "name": "Цинк карнозин (Dr.Best, Life Extension)",
+        "dose": "2*1 мах овқ 40 мин олдин",
+        "note": "Эрталаб, 5 ой",
         "time_slot": "before_breakfast",
-        "time_label": "Nonushta oldin 40 daqiqa (07:00)",
+        "time_label": "Нонушта 40 мин олдин",
         "start_day": 2,
         "end_day": 150,
     },
-    # --- 3-KUN ---
+
+    # ── 3-КУН ──────────────────────────────────────────────────────────────
+
     {
-        "name": "Kalsiy tsitrat 1000",
-        "dose": "2 osh qoshiq",
-        "note": "Kechqurun ovqat oldin, 3 oy",
+        "name": "Кальций цитрат 1000",
+        "dose": "1 мах 2 ош қошиқдан",
+        "note": "Кечқурун овқат олдин ичишга, 3 ой",
         "time_slot": "before_dinner",
-        "time_label": "Kechki ovqat oldin (17:00)",
+        "time_label": "Кечқурун овқат олдин",
         "start_day": 3,
         "end_day": 90,
     },
     {
-        "name": "Gl Repair (Anagran)",
-        "dose": "2 ta × 2 mahal",
-        "note": "Ovqat bilan birga, 2 oy. Keyin Intrinza",
+        "name": "Gl repair (Анагран)",
+        "dose": "2 мах овқ билан бирга",
+        "note": "2 ой. 2 ойдан кейин → Интринза (D'Adamo) 2*2 мах ов вақтида 3 ой",
         "time_slot": "breakfast",
-        "time_label": "Nonushta vaqtida (07:30)",
+        "time_label": "Нонушта вақтида",
         "start_day": 3,
         "end_day": 60,
     },
     {
-        "name": "Gl Repair (Anagran) — tushlik",
-        "dose": "2 ta",
-        "note": "Ovqat bilan, 2 oy",
-        "time_slot": "afternoon",
-        "time_label": "Tushlik (13:00)",
+        "name": "Gl repair (Анагран)",
+        "dose": "2 мах овқ билан бирга",
+        "note": "2 ой",
+        "time_slot": "dinner",
+        "time_label": "Кечки овқат вақтида",
         "start_day": 3,
         "end_day": 60,
     },
     {
-        "name": "Intrinza (D'Adamo)",
-        "dose": "2 ta × 2 mahal",
-        "note": "Ovqat vaqtida, 3 oy (Gl Repair tugagandan keyin)",
+        "name": "Интринза (D'Adamo)",
+        "dose": "2*2 мах ов вақтида",
+        "note": "3 ой (Gl repair тугагандан кейин)",
         "time_slot": "breakfast",
-        "time_label": "Nonushta vaqtida (07:30)",
+        "time_label": "Нонушта вақтида",
         "start_day": 61,
         "end_day": 150,
     },
-    # --- 4-6-8-10-12 kun kapelnitsa ---
     {
-        "name": "Gepamerts + Elkar (kapelnitsa)",
-        "dose": "Gepamerts 10.0 + NaCl 200ml; 2 soat sekin tomchilab",
-        "note": "4, 6, 8, 10, 12-kunlari",
+        "name": "Интринза (D'Adamo)",
+        "dose": "2*2 мах ов вақтида",
+        "note": "3 ой",
+        "time_slot": "dinner",
+        "time_label": "Кечки овқат вақтида",
+        "start_day": 61,
+        "end_day": 150,
+    },
+
+    # ── КАПЕЛЬНИЦАЛАР 4-6-8-10-12-КУН ──────────────────────────────────────
+
+    {
+        "name": "Гепамерц 10.0 + Натрий хлор 0,9%-200мл → Элькар 5.0 + натрий хлор 0.9%-15.0",
+        "dose": "т.и, 2 соат давомида секин томчилаб",
+        "note": "4-6-8-10-12-кунлари",
         "time_slot": "injection",
-        "time_label": "Kapelnitsa (09:00)",
+        "time_label": "Капельница (кун 1-ярмида)",
         "start_day": 4,
         "end_day": 12,
     },
+
+    # ── МУШАК 4-8-12-15-18-КУН ──────────────────────────────────────────────
+
     {
-        "name": "Norogrizovim 1.0+2.0 (mushak ichiga)",
-        "dose": "m.o.",
-        "note": "4, 8, 12, 15, 18-kunlari, kechqurun",
+        "name": "Норогризовим 1,0+2,0",
+        "dose": "м.о",
+        "note": "4-8-12-15-18-кунлари кечқурун",
         "time_slot": "im",
-        "time_label": "Mushak ichiga (19:30)",
+        "time_label": "Мушак ичига (кечқурун)",
         "start_day": 4,
         "end_day": 18,
     },
-    # --- 5-7-9-11-13 kun kapelnitsa ---
+
+    # ── КАПЕЛЬНИЦАЛАР 5-7-9-11-13-КУН ──────────────────────────────────────
+
     {
-        "name": "Reamberin + Geptral + TAD/Glutaion + Vit C + B6 + Essensialy (kap.)",
-        "dose": "Kapelnitsa sxemasi bo'yicha",
-        "note": "5, 7, 9, 11, 13-kunlari t.i.",
+        "name": (
+            "Реамберин 200мл → Гептрал 500 (эритувчисида) + вода для инъекций 20.0 → "
+            "TAD 600.0 (эритувчисида) + вода для инъекций 20.0 ёки Глутион 600 + вода для инъекций 20.0 → "
+            "Витамин С 5%-2,0 + натрий хлор 0,9%-3,0 → "
+            "Витамин В6 5%-1,0 + натрий хлор 0,9%-10.0 → "
+            "Эссенциале 5,0 + свежий қон 5,0 ёки Фосфоглив 10,0"
+        ),
+        "dose": "т.и",
+        "note": "5-7-9-11-13-кунлари",
         "time_slot": "injection",
-        "time_label": "Kapelnitsa (09:00)",
+        "time_label": "Капельница (кун 1-ярмида)",
         "start_day": 5,
         "end_day": 13,
     },
-    # --- 7-KUN ---
+
+    # ── 7-КУН ──────────────────────────────────────────────────────────────
+
     {
-        "name": "Rejuvenzyme (Source Naturals)",
-        "dose": "2 ta",
-        "note": "Ovqatdan 40 daqiqa oldin, 3 oy",
+        "name": "Rejuvenzyme (source naturals)",
+        "dose": "2*2 махал овқ 40 мин олдин",
+        "note": "3 ой",
         "time_slot": "before_breakfast",
-        "time_label": "Nonushta oldin 40 daqiqa (07:00)",
+        "time_label": "Нонушта 40 мин олдин",
         "start_day": 7,
         "end_day": 97,
     },
-    # --- 8-KUN ---
     {
-        "name": "Taurin 1000 mg",
-        "dose": "1 ta",
-        "note": "Kechqurun ovqat oldin, 2 oy",
+        "name": "Rejuvenzyme (source naturals)",
+        "dose": "2 та — кечки овқат 40 мин олдин",
+        "note": "3 ой",
         "time_slot": "before_dinner",
-        "time_label": "Kechki ovqat oldin (17:00)",
+        "time_label": "Кечки овқат 40 мин олдин",
+        "start_day": 7,
+        "end_day": 97,
+    },
+
+    # ── 8-КУН ──────────────────────────────────────────────────────────────
+
+    {
+        "name": "Таурин 1000 мг",
+        "dose": "1 тадан 1 махал овқ олдин",
+        "note": "Кечқурун, 2 ой",
+        "time_slot": "before_dinner",
+        "time_label": "Кечқурун овқат олдин",
         "start_day": 8,
         "end_day": 68,
     },
-    # --- 9-KUN ---
+
+    # ── 9-КУН ──────────────────────────────────────────────────────────────
+
     {
-        "name": "Liposomal Vitamin A Anagran sprey",
-        "dose": "1 marta og'izga sepish",
-        "note": "Kechqurun ovqat vaqtida, 3 oy",
+        "name": "Липосомал витамин А Анагран Спрей",
+        "dose": "1 мах ов вақтида кечқурун оғизга сепишга",
+        "note": "3 ой",
         "time_slot": "dinner",
-        "time_label": "Kechki ovqat (19:00)",
+        "time_label": "Кечки овқат вақтида",
         "start_day": 9,
         "end_day": 99,
     },
     {
-        "name": "Vitamin D3+K2 5000",
-        "dose": "1 ta",
-        "note": "Ovqatdan keyin, doimo",
+        "name": "Витамин Д3+К2 5000",
+        "dose": "1 мах овқатдан кейин ичиш",
+        "note": "Доимо",
         "time_slot": "evening",
-        "time_label": "Kechqurun ovqatdan keyin (20:00)",
+        "time_label": "Овқатдан кейин",
         "start_day": 9,
         "end_day": 9999,
     },
-    # --- 10-KUN ---
+
+    # ── 10-КУН ─────────────────────────────────────────────────────────────
+
     {
-        "name": "Glutamin 5g (Jarrow poroshok)",
-        "dose": "1 ch.q. (5 g)",
-        "note": "Ertalab ovqatdan 50 daqiqa oldin, 1 yil",
+        "name": "Глутамин 5 г Жарров порошок",
+        "dose": "1 ч.қ дан эрталаб овқ 50 мин олд",
+        "note": "1 йил",
         "time_slot": "before_breakfast",
-        "time_label": "Nonushta oldin 50 daqiqa (07:00)",
+        "time_label": "Нонушта 50 мин олдин",
         "start_day": 10,
         "end_day": 365,
     },
     {
-        "name": "Betain xlor",
-        "dose": "Individual (1 kapsuldan boshlash, qizish hissigacha oshirish)",
-        "note": "Har 3 mahal ovqat bilan. Qizish hissida 1 ga qaytariladi. 6 oy–1 yil",
+        "name": "Бетаин хлор",
+        "dose": "1*3 мах овқ вақтида",
+        "note": (
+            "Тест қилиб ичилади: аввал 1 капс ичилади, озгина қизиш ҳисси бўлмаса "
+            "2 капсга ўтилади, токи қизиш ҳисси бўлгунгача капс сони кўтарилади. "
+            "Масалан 3 та ичилганда қизиш ҳисси бўлса 1 капс орқага қайтилади — яъни 2 капс бўлади. "
+            "Индивидуал ичасиз доимо токи 1 та капсула қизиш ҳосил қилмагунга қадар. "
+            "Балки 6 ой, балки 1 йил."
+        ),
         "time_slot": "breakfast",
-        "time_label": "Nonushta vaqtida (07:30)",
+        "time_label": "Нонушта вақтида",
         "start_day": 10,
         "end_day": 365,
     },
-    # --- 12-KUN ---
     {
-        "name": "Omega-3 с имбирём (Anagran)",
-        "dose": "1 ta",
-        "note": "Ovqat vaqtida, 3 oy",
+        "name": "Бетаин хлор",
+        "dose": "Н капс — тушлик вақтида",
+        "note": "Индивидуал, 3 махал овқат вақтида",
+        "time_slot": "afternoon",
+        "time_label": "Тушлик вақтида",
+        "start_day": 10,
+        "end_day": 365,
+    },
+    {
+        "name": "Бетаин хлор",
+        "dose": "Н капс — кечки овқат вақтида",
+        "note": "Индивидуал, 3 махал овқат вақтида",
         "time_slot": "dinner",
-        "time_label": "Kechki ovqat (19:00)",
+        "time_label": "Кечки овқат вақтида",
+        "start_day": 10,
+        "end_day": 365,
+    },
+
+    # ── 12-КУН ─────────────────────────────────────────────────────────────
+
+    {
+        "name": "Омега 3 с имбирём Анагран",
+        "dose": "1 мах овқ вақтида",
+        "note": "3 ой",
+        "time_slot": "dinner",
+        "time_label": "Кечки овқат вақтида",
         "start_day": 12,
         "end_day": 102,
     },
-    # --- Kapelnitsa tugagandan keyin (taxminan 14-kun) ---
+
+    # ── КАПЕЛЬНИЦА ТУГАГАНДАН СЎНГ (~14-кун) ────────────────────────────────
+
     {
-        "name": "Vitamin C / Natriy askorbat 500",
-        "dose": "1 ta",
-        "note": "Ertalab ovqatdan 30 daqiqa oldin, 3 oy (kapelnitsa tugagandan keyin)",
+        "name": "Витамин C (Натрий аскорбат) 500",
+        "dose": "Эрталаб овқ 0.5 соат олдин",
+        "note": "Капельницалар тугагандан сўнг, 3 ой",
         "time_slot": "before_breakfast",
-        "time_label": "Nonushta oldin (07:00)",
+        "time_label": "Нонушта 30 мин олдин",
         "start_day": 14,
         "end_day": 104,
     },
+
+    # ── ДОИМИЙ ЭСЛАТМА ──────────────────────────────────────────────────────
+    # 21. Витамин В9 ўрнига кўпроқ кўкатлар истеъмол қилиш — дори эмас, парҳез тавсияси
 ]
+
+# ── ЭСЛАТМАЛАР (PDF дан) ─────────────────────────────────────────────────────
+
+DAILY_NOTES = [
+    "Пархез: Шакар, Сут, Ун маҳсулотларни чеклаш",
+    "Тоза ҳавода кунига 10 000 қадамдан 20 000 қадамгача юриш, соат 19 гача",
+    "Ҳар луқмани 30 марта чайнаш, ҳар овқатдан олдин уйда тайёрланган олма сирка 2 ч.қош 100 гр илиқ сувда аралашган ҳолда ёки лимонли сув ичишга",
+    "Кечга 21:00 да уйқу!!!",
+    "Кўкат, сабзавот, ҳамиртурушли нон истеъмол қилишга",
+    "Наҳор 0,5 литр иссиқ сув ичишга, сўнг қорин нафас (YouTube: дыхательная гимнастика) ва гимнастика қилиш шарт, кечга 17:00 да 200 гр иссиқ сув ичишга!",
+    "Ҳижрий ой 17-19 кунлари ҳижама — 3 марта",
+    "Ванна оёққа аралашма: 10 г Магнезий Сульфат порошок + 15 гр Чайная сода + 25 гр соль для ванн — 10 мин давомида уйқудан аввал, 1 ой, 10 литр иссиқ сувга",
+    "Витамин В9 ўрнига кўпроқ кўкатлар истеъмол қилиш",
+]
+
+DIET_NOTE = "БГ, БМ, БЛ — қорнни дам қилувчи маҳсулотларни қатъий чеклаш"
+
+PURCHASE_NOTE = (
+    "Бемор учун эслатма: препаратларни интернет магазиндан сотиб олаётганда "
+    "фақат номини юборинг, рецепт юбориш мумкун эмас — бу сизга омонат!\n"
+    "🔵 Кўк — Туркия | 🟢 Яшил — Америка | 🟡 Сариқ — Россия | ⚪ Рангсиз — Аптека"
+)

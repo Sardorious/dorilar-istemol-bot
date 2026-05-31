@@ -151,7 +151,7 @@ async def cb_load_default(callback: CallbackQuery):
     patient_id = int(callback.data.split(":")[1])
     await callback.answer("Yuklanmoqda...", show_alert=False)
 
-    from app.bot.default_recipe import DEFAULT_MEDS
+    from app.bot.default_recipe import DEFAULT_MEDS, DAILY_NOTES, DIET_NOTE, PURCHASE_NOTE, PATIENT_META
     async with AsyncSessionLocal() as session:
         count = 0
         for med_data in DEFAULT_MEDS:
@@ -172,7 +172,15 @@ async def cb_load_default(callback: CallbackQuery):
             )
             count += 1
 
-    await callback.message.answer(f"✅ {count} ta dori yuklandi!")
+    notes_text = "\n".join(f"• {n}" for n in DAILY_NOTES)
+    await callback.message.answer(
+        f"✅ <b>{count} та дори юкланди!</b>\n\n"
+        f"🩺 <b>Ташхис:</b>\n<i>{PATIENT_META['diagnosis']}</i>\n\n"
+        f"🥗 <b>Диета:</b> {DIET_NOTE}\n\n"
+        f"📋 <b>Кундалик эслатмалар:</b>\n{notes_text}\n\n"
+        f"ℹ️ {PURCHASE_NOTE}",
+        parse_mode="HTML"
+    )
 
 
 @router.callback_query(F.data.startswith("add_med:"))
