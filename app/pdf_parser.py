@@ -125,34 +125,76 @@ def _call_claude(pdf_b64: str) -> str:
     return message.content[0].text
 
 
+class PdfParseError(RuntimeError):
+    """PDF dan dorilar ajratib olinmadi."""
+
+
+class ParserUnavailableError(PdfParseError):
+    """Xizmat ishlamayapti: API kaliti, hisob yoki limit muammosi.
+
+    Bunday xatoda qayta urinish foyda bermaydi — foydalanuvchiga
+    "кейинроқ уриниб кўринг" деб айтиш керак, "бошқа PDF юборинг" эмас.
+    """
+
+
+# Qayta urinish MA'NOSIZ bo'lgan HTTP kodlar: so'rov yoki hisob muammosi,
+# takrorlansa ham aynan shu javob qaytadi.
+_FATAL_STATUS = frozenset({400, 401, 403, 404, 413, 422})
+
+MAX_ATTEMPTS = 3
+
+
 async def parse_pdf_to_medications(pdf_bytes: bytes) -> dict:
     pdf_b64 = base64.standard_b64encode(pdf_bytes).decode("utf-8")
     last_error: Exception | None = None
 
-    for attempt in range(1, 3):
+    for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
             # MUHIM: anthropic klienti sinxron. To'g'ridan-to'g'ri chaqirilsa
             # event loop bloklanadi va PDF tahlil paytida butun bot muzlaydi.
             raw = await asyncio.to_thread(_call_claude, pdf_b64)
-        except anthropic.APIError as e:
-            last_error = e
-            logger.error("Anthropic API xatosi (urinish %s): %s", attempt, e)
-            if attempt < 2:
-                await asyncio.sleep(2)
-            continue
 
-        try:
-            data = _try_parse_json(raw)
-        except json.JSONDecodeError as e:
+        except anthropic.APIStatusError as e:
+            if e.status_code in _FATAL_STATUS:
+                # Masalan: "This organization has been disabled" (400) yoki
+                # noto'g'ri API kalit (401). Qayta urinish vaqtni behuda sarflaydi.
+                logger.error(
+                    "Anthropic хатоси (қайта уринилмайди, HTTP %s): %s",
+                    e.status_code, e,
+                )
+                raise ParserUnavailableError(str(e)) from e
+
             last_error = e
-            logger.error(
-                "JSON parse xatosi (urinish %s): %s | javob boshi: %.200s",
-                attempt, e, raw,
+            logger.warning(
+                "Anthropic HTTP %s (уриниш %s/%s): %s",
+                e.status_code, attempt, MAX_ATTEMPTS, e,
             )
-            continue
 
-        meds_count = len(data.get("medications", []))
-        logger.info("PDF tahlil qilindi (urinish %s): %s ta dori", attempt, meds_count)
-        return data
+        except anthropic.APIConnectionError as e:
+            last_error = e
+            logger.warning(
+                "Anthropic га уланиб бўлмади (уриниш %s/%s): %s",
+                attempt, MAX_ATTEMPTS, e,
+            )
 
-    raise RuntimeError(f"PDF tahlil qilinmadi: {last_error}") from last_error
+        else:
+            try:
+                data = _try_parse_json(raw)
+            except json.JSONDecodeError as e:
+                last_error = e
+                logger.warning(
+                    "JSON parse хатоси (уриниш %s/%s): %s | жавоб боши: %.200s",
+                    attempt, MAX_ATTEMPTS, e, raw,
+                )
+            else:
+                meds_count = len(data.get("medications", []))
+                logger.info(
+                    "PDF таҳлил қилинди (уриниш %s): %s та дори", attempt, meds_count
+                )
+                return data
+
+        if attempt < MAX_ATTEMPTS:
+            # Har urinishda kutish vaqti ortadi: 2s, 4s
+            await asyncio.sleep(2 * attempt)
+
+    raise PdfParseError(f"PDF таҳлил қилинмади: {last_error}") from last_error

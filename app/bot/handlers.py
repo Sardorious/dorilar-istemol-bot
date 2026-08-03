@@ -37,7 +37,7 @@ from app.bot.utils import (
 from app.db import queries as q
 from app.db.engine import AsyncSessionLocal
 from app.db.models import DoseLog, Medication, Patient
-from app.pdf_parser import parse_pdf_to_medications
+from app.pdf_parser import ParserUnavailableError, parse_pdf_to_medications
 from app.scheduler.daily import schedule_daily_reminders
 from app.scheduler.jobs import schedule_snooze
 
@@ -114,6 +114,16 @@ async def handle_pdf(message: Message, bot: Bot, state: FSMContext):
             f"<i>Бу 1-кун ҳисобланади.</i>",
             parse_mode="HTML",
             reply_markup=start_date_keyboard(),
+        )
+
+    except ParserUnavailableError:
+        await state.clear()
+        logger.exception("Таҳлил хизмати ишламаяпти")
+        await status_msg.edit_text(
+            "⚠️ <b>Хизмат вақтинча ишламаяпти.</b>\n\n"
+            "Бу файлингиздаги муаммо эмас. Бироздан кейин қайта уриниб кўринг — "
+            "муаммо давом этса, админга хабар беринг.",
+            parse_mode="HTML",
         )
 
     except Exception as e:
