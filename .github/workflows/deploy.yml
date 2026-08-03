@@ -51,7 +51,7 @@ jobs:
             echo "Stopping and removing old container..."
             docker rm -f dorilar-bot_bot_1 2>/dev/null || true
 
-            cd ~/dorilar-bot
+            cd ~/deploy/dorilar-istemol-bot
 
             echo "Pulling latest code..."
             git pull origin main
