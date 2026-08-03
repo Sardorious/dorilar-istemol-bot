@@ -3,8 +3,8 @@
 Loyihada vaqt FAQAT shu modul orqali olinadi.
 Barcha datetime — timezone-aware (Asia/Tashkent).
 """
-from datetime import datetime, date, time as dt_time
-from typing import Optional
+from datetime import date, datetime
+from datetime import time as dt_time
 from zoneinfo import ZoneInfo
 
 from app.config import settings
@@ -29,7 +29,7 @@ def today() -> date:
     return now().date()
 
 
-def make_aware(dt: Optional[datetime]) -> Optional[datetime]:
+def make_aware(dt: datetime | None) -> datetime | None:
     """Naive datetime ni Toshkent zonasiga bog'laydi.
 
     DB dagi eski (naive) yozuvlar bilan ishlash uchun kerak.

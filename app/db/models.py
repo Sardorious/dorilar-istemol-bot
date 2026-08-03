@@ -1,6 +1,14 @@
 from sqlalchemy import (
-    Column, Integer, BigInteger, String, Boolean,
-    DateTime, ForeignKey, Text, Index, UniqueConstraint,
+    BigInteger,
+    Boolean,
+    Column,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import DeclarativeBase, relationship
 

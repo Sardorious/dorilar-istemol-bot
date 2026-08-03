@@ -1,21 +1,34 @@
 import logging
+from collections import defaultdict
 from datetime import datetime
-from aiogram import Router, F, Bot
-from aiogram.types import Message, CallbackQuery
-from aiogram.filters import CommandStart, Command
-from aiogram.exceptions import TelegramBadRequest
 
-from app.db.engine import AsyncSessionLocal
-from app.db import queries as q
-from app.bot.keyboards import (
-    main_menu_keyboard, calendar_keyboard,
-    day_meds_keyboard, dose_keyboard, snooze_keyboard,
-    patients_list_keyboard,
-)
+from aiogram import Bot, F, Router
+from aiogram.exceptions import TelegramBadRequest
+from aiogram.filters import Command, CommandStart
+from aiogram.types import CallbackQuery, Message
+from sqlalchemy import func, select, update
+
 from app import tz
-from app.bot.utils import get_treatment_day, build_day_summary, format_status, format_time_slot
-from app.scheduler.jobs import schedule_snooze
+from app.bot.keyboards import (
+    calendar_keyboard,
+    day_meds_keyboard,
+    dose_keyboard,
+    main_menu_keyboard,
+    patients_list_keyboard,
+    snooze_keyboard,
+)
+from app.bot.utils import (
+    build_day_summary,
+    format_status,
+    format_time_slot,
+    get_treatment_day,
+)
+from app.db import queries as q
+from app.db.engine import AsyncSessionLocal
+from app.db.models import DoseLog, Medication, Patient
+from app.pdf_parser import parse_pdf_to_medications
 from app.scheduler.daily import schedule_daily_reminders
+from app.scheduler.jobs import schedule_snooze
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -61,7 +74,6 @@ async def handle_pdf(message: Message, bot: Bot):
         pdf_bytes = await bot.download_file(file.file_path)
         pdf_content = pdf_bytes.read() if hasattr(pdf_bytes, "read") else bytes(pdf_bytes)
 
-        from app.pdf_parser import parse_pdf_to_medications
         data = await parse_pdf_to_medications(pdf_content)
 
         meds = data.get("medications", [])
@@ -174,8 +186,6 @@ async def _show_calendar(message: Message):
             await message.answer("❌ Аввал PDF файл юборинг.")
             return
         current_day = get_treatment_day(patient)
-        from sqlalchemy import select, func
-        from app.db.models import Medication
         result = await session.execute(
             select(func.max(Medication.end_day)).where(Medication.patient_id == patient.id)
         )
@@ -233,14 +243,12 @@ async def _show_shopping(message: Message):
         if not patient:
             await message.answer("❌ Аввал PDF файл юборинг.")
             return
-        from app.db.queries import get_all_meds
-        meds = await get_all_meds(session, patient.id)
+        meds = await q.get_all_meds(session, patient.id)
 
     if not meds:
         await message.answer("Дорилар топилмади.")
         return
 
-    from collections import defaultdict
     grouped = defaultdict(list)
     for med in meds:
         grouped[med.name].append(med)
@@ -358,8 +366,6 @@ async def cb_med_detail(callback: CallbackQuery):
     med_id, log_id = int(parts[1]), int(parts[2])
 
     async with AsyncSessionLocal() as session:
-        from sqlalchemy import select
-        from app.db.models import Medication, DoseLog
         med = (await session.execute(select(Medication).where(Medication.id == med_id))).scalar_one_or_none()
         log = (await session.execute(select(DoseLog).where(DoseLog.id == log_id))).scalar_one_or_none()
 
@@ -429,8 +435,6 @@ async def cb_snooze(callback: CallbackQuery, bot: Bot):
     log_id, minutes = int(parts[1]), int(parts[2])
 
     async with AsyncSessionLocal() as session:
-        from sqlalchemy import select
-        from app.db.models import DoseLog, Medication
         log = (await session.execute(select(DoseLog).where(DoseLog.id == log_id))).scalar_one_or_none()
         med = None
         if log:
@@ -452,8 +456,6 @@ async def cb_switch_patient(callback: CallbackQuery, bot: Bot):
     await callback.answer()
     patient_id = int(callback.data.split(":")[1])
     async with AsyncSessionLocal() as session:
-        from sqlalchemy import select, update
-        from app.db.models import Patient
         await session.execute(
             update(Patient).where(Patient.telegram_id == callback.from_user.id).values(is_active=False)
         )

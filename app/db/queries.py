@@ -1,12 +1,11 @@
 import logging
 from datetime import datetime, timedelta
-from typing import Optional, List
 
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import tz
-from app.db.models import Patient, Medication, DoseLog
+from app.db.models import DoseLog, Medication, Patient
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +27,7 @@ REMINDER_MAP = {
 DEFAULT_SLOT = "breakfast"
 
 
-def resolve_reminder_time(slot: str) -> tuple:
+def resolve_reminder_time(slot: str) -> tuple[int, int]:
     """time_slot dan (soat, daqiqa) chiqaradi.
 
     Noma'lum slot uchun DEFAULT_SLOT ga tushadi va warning yozadi —
@@ -42,7 +41,7 @@ def resolve_reminder_time(slot: str) -> tuple:
     return REMINDER_MAP[DEFAULT_SLOT]
 
 
-async def get_active_patient(session: AsyncSession, tg_id: int) -> Optional[Patient]:
+async def get_active_patient(session: AsyncSession, tg_id: int) -> Patient | None:
     result = await session.execute(
         select(Patient).where(
             Patient.telegram_id == tg_id,
@@ -52,7 +51,7 @@ async def get_active_patient(session: AsyncSession, tg_id: int) -> Optional[Pati
     return result.scalars().first()
 
 
-async def get_all_patients(session: AsyncSession, tg_id: int) -> List[Patient]:
+async def get_all_patients(session: AsyncSession, tg_id: int) -> list[Patient]:
     """Foydalanuvchining BARCHA retseptlari — arxivdagilari ham.
 
     Endi bir vaqtda faqat bitta retsept aktiv bo'ladi, shuning uchun
@@ -71,11 +70,11 @@ async def get_all_patients(session: AsyncSession, tg_id: int) -> List[Patient]:
 async def create_patient_from_pdf(
     session: AsyncSession,
     tg_id: int,
-    full_name: Optional[str],
+    full_name: str | None,
     start_date: datetime,
-    diagnosis: Optional[str],
-    diet_note: Optional[str],
-    daily_notes: Optional[str],
+    diagnosis: str | None,
+    diet_note: str | None,
+    daily_notes: str | None,
     medications: list,
 ) -> Patient:
     # MUHIM: yangi retsept yuklanganda eskilari o'chiriladi.
@@ -125,7 +124,7 @@ async def create_patient_from_pdf(
     return patient
 
 
-async def get_meds_for_day(session: AsyncSession, patient_id: int, day: int) -> List[Medication]:
+async def get_meds_for_day(session: AsyncSession, patient_id: int, day: int) -> list[Medication]:
     result = await session.execute(
         select(Medication).where(
             Medication.patient_id == patient_id,
@@ -207,7 +206,7 @@ async def get_history(session: AsyncSession, patient_id: int, limit: int = 40):
     return result.all()
 
 
-async def get_all_meds(session: AsyncSession, patient_id: int) -> List[Medication]:
+async def get_all_meds(session: AsyncSession, patient_id: int) -> list[Medication]:
     result = await session.execute(
         select(Medication).where(Medication.patient_id == patient_id)
         .order_by(Medication.start_day, Medication.time_slot)

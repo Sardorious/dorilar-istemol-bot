@@ -33,6 +33,32 @@ def _add(job_id: str, run_at):
     )
 
 
+# ── 0. Aylanma import ─────────────────────────────────────────────────────────
+
+def test_no_circular_import_from_scheduler_entry():
+    """Regressiya: app.scheduler.jobs BIRINCHI import qilinganda ham ishlashi kerak.
+
+    Ilgari jobs.py yuqori darajada app.bot.keyboards ni import qilardi,
+    app/bot/__init__.py esa handlers ni yuklardi, handlers yana
+    app.scheduler ga qaytardi — natijada ImportError.
+    """
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    repo_root = Path(__file__).resolve().parent.parent
+    code = "import app.scheduler.jobs; import app.bot.handlers; print('ok')"
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=repo_root,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "ok" in result.stdout
+
+
 # ── 1. Vaqt zonasi ────────────────────────────────────────────────────────────
 
 def test_scheduler_timezone_is_tashkent():

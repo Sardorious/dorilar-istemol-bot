@@ -1,12 +1,18 @@
 import logging
 from datetime import datetime, timedelta
 
+from aiogram import Bot
+from aiogram.exceptions import TelegramAPIError
+from apscheduler.jobstores.base import JobLookupError
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.date import DateTrigger
-from aiogram import Bot
 
 from app import tz
-from app.bot.keyboards import dose_keyboard
+
+# DIQQAT: bu modul app.bot dan HECH NARSA ni yuqori darajada import qilmaydi.
+# app/bot/__init__.py darrov handlers ni yuklaydi, handlers esa app.scheduler
+# ga bog'langan — natijada aylanma import (circular import) hosil bo'ladi.
+# Shuning uchun dose_keyboard send_reminder ichida, chaqirilganda import qilinadi.
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +70,10 @@ async def send_reminder(
     if not await _dose_still_pending(dose_log_id):
         return
 
+    # Ataylab funksiya ichida: yuqori darajada import qilinsa aylanma
+    # import hosil bo'ladi (modul boshidagi izohga qarang).
+    from app.bot.keyboards import dose_keyboard
+
     try:
         text = (
             f"💊 <b>Дори вақти!</b>\n\n"
@@ -77,8 +87,9 @@ async def send_reminder(
             parse_mode="HTML",
             reply_markup=dose_keyboard(dose_log_id),
         )
-    except Exception as e:
-        logger.error(f"Эслатма юборишда хатолик {telegram_id}: {e}")
+    except TelegramAPIError as e:
+        # Eng ko'p uchraydigan holat: foydalanuvchi botni bloklagan
+        logger.error("Эслатма юборилмади (tg_id=%s): %s", telegram_id, e)
 
 
 def schedule_reminder(
@@ -125,8 +136,11 @@ def schedule_snooze(
     return run_at
 
 
-def cancel_job(job_id: str):
+def cancel_job(job_id: str) -> bool:
+    """Jobni bekor qiladi. Job topilmasa — xato emas, False qaytaradi."""
     try:
         scheduler.remove_job(job_id)
-    except Exception:
-        pass
+    except JobLookupError:
+        logger.debug("Job topilmadi, bekor qilinmadi: %s", job_id)
+        return False
+    return True
