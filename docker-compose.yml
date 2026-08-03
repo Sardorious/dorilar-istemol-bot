@@ -3,6 +3,8 @@ services:
     build: .
     restart: always
     env_file: .env
+    environment:
+      TZ: Asia/Tashkent
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs

@@ -3,6 +3,7 @@ from datetime import datetime
 from aiogram import Router, F, Bot
 from aiogram.types import Message, CallbackQuery
 from aiogram.filters import CommandStart, Command
+from aiogram.exceptions import TelegramBadRequest
 
 from app.db.engine import AsyncSessionLocal
 from app.db import queries as q
@@ -11,8 +12,10 @@ from app.bot.keyboards import (
     day_meds_keyboard, dose_keyboard, snooze_keyboard,
     patients_list_keyboard,
 )
+from app import tz
 from app.bot.utils import get_treatment_day, build_day_summary, format_status, format_time_slot
 from app.scheduler.jobs import schedule_snooze
+from app.scheduler.daily import schedule_daily_reminders
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -66,12 +69,13 @@ async def handle_pdf(message: Message, bot: Bot):
             await status_msg.edit_text("❌ PDF дан дорилар топилмади. Бошқа файл юборинг.")
             return
 
-        start_date = datetime.now()
+        start_date = tz.now()
         if data.get("start_date"):
             try:
-                start_date = datetime.strptime(data["start_date"], "%d.%m.%Y")
+                parsed = datetime.strptime(data["start_date"], "%d.%m.%Y")
+                start_date = tz.at(parsed.date(), 0, 0)
             except ValueError:
-                pass
+                logger.warning("start_date o'qilmadi: %r", data.get("start_date"))
 
         notes_list = data.get("daily_notes", [])
         notes_str = "\n".join(notes_list) if notes_list else None
@@ -88,13 +92,18 @@ async def handle_pdf(message: Message, bot: Bot):
                 medications=meds,
             )
 
+        # Yangi retsept uchun eslatmalarni DARROV rejalashtiramiz —
+        # aks holda foydalanuvchi ertangi 00:05 gacha eslatma olmaydi.
+        await schedule_daily_reminders(bot)
+
+        day = get_treatment_day(patient)
         name_line = f"👤 <b>{patient.full_name}</b>\n" if patient.full_name else ""
         diag_line = f"🩺 <i>{patient.diagnosis}</i>\n\n" if patient.diagnosis else "\n"
 
         await status_msg.edit_text(
             f"✅ <b>{len(meds)} та дори аниқланди!</b>\n\n"
             f"{name_line}{diag_line}"
-            f"Бугун <b>1-кун</b>.",
+            f"Бугун <b>{day}-кун</b>.",
             parse_mode="HTML",
         )
         await message.answer("Менюдан танланг:", reply_markup=main_menu_keyboard())
@@ -372,14 +381,22 @@ async def cb_med_detail(callback: CallbackQuery):
     await callback.message.answer(text, parse_mode="HTML", reply_markup=kb)
 
 
+async def _append_to_message(callback: CallbackQuery, suffix: str):
+    """Xabar matniga natija qo'shadi. Matn yo'q/o'zgarmagan holatlarda yiqilmaydi."""
+    base = callback.message.html_text if callback.message.text else ""
+    try:
+        await callback.message.edit_text(base + suffix, parse_mode="HTML")
+    except TelegramBadRequest as e:
+        logger.warning(f"Xabarni tahrirlab bo'lmadi: {e}")
+        await callback.message.answer(suffix.strip(), parse_mode="HTML")
+
+
 @router.callback_query(F.data.startswith("taken:"))
 async def cb_taken(callback: CallbackQuery):
     log_id = int(callback.data.split(":")[1])
     async with AsyncSessionLocal() as session:
         await q.mark_dose_taken(session, log_id)
-    await callback.message.edit_text(
-        callback.message.text + "\n\n✅ <b>Истеъмол қилинди!</b>", parse_mode="HTML"
-    )
+    await _append_to_message(callback, "\n\n✅ <b>Истеъмол қилинди!</b>")
     await callback.answer("✅ Баракалла!")
 
 
@@ -388,9 +405,7 @@ async def cb_skip(callback: CallbackQuery):
     log_id = int(callback.data.split(":")[1])
     async with AsyncSessionLocal() as session:
         await q.mark_dose_skipped(session, log_id)
-    await callback.message.edit_text(
-        callback.message.text + "\n\n❌ Ўтказиб юборилди.", parse_mode="HTML"
-    )
+    await _append_to_message(callback, "\n\n❌ Ўтказиб юборилди.")
     await callback.answer()
 
 
@@ -433,7 +448,7 @@ async def cb_snooze(callback: CallbackQuery, bot: Bot):
 
 
 @router.callback_query(F.data.startswith("switch_patient:"))
-async def cb_switch_patient(callback: CallbackQuery):
+async def cb_switch_patient(callback: CallbackQuery, bot: Bot):
     await callback.answer()
     patient_id = int(callback.data.split(":")[1])
     async with AsyncSessionLocal() as session:
@@ -447,6 +462,9 @@ async def cb_switch_patient(callback: CallbackQuery):
         )
         await session.commit()
         patient = (await session.execute(select(Patient).where(Patient.id == patient_id))).scalar_one_or_none()
+
+    # Aktiv retsept o'zgardi — eslatmalar jadvalini qayta quramiz
+    await schedule_daily_reminders(bot)
 
     if patient:
         day = get_treatment_day(patient)

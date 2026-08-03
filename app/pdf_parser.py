@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import base64
@@ -93,45 +94,63 @@ def _try_parse_json(raw: str) -> dict:
         return json.loads(fixed)
 
 
+def _call_claude(pdf_b64: str) -> str:
+    """Sinxron API chaqiruvi — alohida thread da bajariladi."""
+    message = client.messages.create(
+        model="claude-opus-4-5",
+        max_tokens=8192,
+        system=SYSTEM_PROMPT,
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "document",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "application/pdf",
+                            "data": pdf_b64,
+                        },
+                    },
+                    {
+                        "type": "text",
+                        "text": "Ушбу рецептдан барча дориларни ажратиб тўлиқ JSON қайтар. JSON охири } билан ёпилган бўлсин.",
+                    },
+                ],
+            }
+        ],
+    )
+    return message.content[0].text
+
+
 async def parse_pdf_to_medications(pdf_bytes: bytes) -> dict:
     pdf_b64 = base64.standard_b64encode(pdf_bytes).decode("utf-8")
+    last_error: Exception | None = None
 
-    for attempt in range(2):
+    for attempt in range(1, 3):
         try:
-            message = client.messages.create(
-                model="claude-opus-4-5",
-                max_tokens=8192,
-                system=SYSTEM_PROMPT,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "document",
-                                "source": {
-                                    "type": "base64",
-                                    "media_type": "application/pdf",
-                                    "data": pdf_b64,
-                                },
-                            },
-                            {
-                                "type": "text",
-                                "text": "Ушбу рецептдан барча дориларни ажратиб тўлиқ JSON қайтар. JSON охири } билан ёпилган бўлсин.",
-                            },
-                        ],
-                    }
-                ],
-            )
+            # MUHIM: anthropic klienti sinxron. To'g'ridan-to'g'ri chaqirilsa
+            # event loop bloklanadi va PDF tahlil paytida butun bot muzlaydi.
+            raw = await asyncio.to_thread(_call_claude, pdf_b64)
+        except anthropic.APIError as e:
+            last_error = e
+            logger.error("Anthropic API xatosi (urinish %s): %s", attempt, e)
+            if attempt < 2:
+                await asyncio.sleep(2)
+            continue
 
-            raw = message.content[0].text
+        try:
             data = _try_parse_json(raw)
-            meds_count = len(data.get("medications", []))
-            logger.info(f"PDF tahlil qilindi (urinish {attempt+1}): {meds_count} ta dori")
-            return data
+        except json.JSONDecodeError as e:
+            last_error = e
+            logger.error(
+                "JSON parse xatosi (urinish %s): %s | javob boshi: %.200s",
+                attempt, e, raw,
+            )
+            continue
 
-        except (json.JSONDecodeError, Exception) as e:
-            logger.error(f"Urinish {attempt+1} xatosi: {e}")
-            if attempt == 1:
-                raise
+        meds_count = len(data.get("medications", []))
+        logger.info("PDF tahlil qilindi (urinish %s): %s ta dori", attempt, meds_count)
+        return data
 
-    return {}
+    raise RuntimeError(f"PDF tahlil qilinmadi: {last_error}") from last_error

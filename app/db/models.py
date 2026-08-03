@@ -1,13 +1,19 @@
-from datetime import datetime
 from sqlalchemy import (
     Column, Integer, BigInteger, String, Boolean,
-    DateTime, ForeignKey, Text,
+    DateTime, ForeignKey, Text, Index, UniqueConstraint,
 )
 from sqlalchemy.orm import DeclarativeBase, relationship
+
+from app import tz
 
 
 class Base(DeclarativeBase):
     pass
+
+
+# DIQQAT: SQLite DateTime ustuni tz offset ni saqlamaydi — yozuvlar
+# Toshkent devor-soati bo'yicha naive holda tushadi. Shuning uchun
+# o'qishda HAR DOIM tz.make_aware(...) orqali qaytadan bog'lanadi.
 
 
 class Patient(Base):
@@ -16,12 +22,12 @@ class Patient(Base):
     id = Column(Integer, primary_key=True)
     full_name = Column(String(200), nullable=True)
     telegram_id = Column(BigInteger, nullable=False, index=True)
-    start_date = Column(DateTime, nullable=False, default=datetime.utcnow)
+    start_date = Column(DateTime, nullable=False, default=tz.now)
     diagnosis = Column(Text, nullable=True)
     diet_note = Column(Text, nullable=True)
     daily_notes = Column(Text, nullable=True)
-    is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=tz.now)
 
     medications = relationship("Medication", back_populates="patient", cascade="all, delete-orphan")
     dose_logs = relationship("DoseLog", back_populates="patient", cascade="all, delete-orphan")
@@ -57,7 +63,16 @@ class DoseLog(Base):
     taken_at = Column(DateTime, nullable=True)
     status = Column(String(20), nullable=False, default="pending")
     snooze_until = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=tz.now)
 
     patient = relationship("Patient", back_populates="dose_logs")
     medication = relationship("Medication", back_populates="dose_logs")
+
+    __table_args__ = (
+        # Bitta dori + bitta kun uchun faqat bitta yozuv bo'lsin
+        UniqueConstraint(
+            "patient_id", "medication_id", "treatment_day",
+            name="uq_dose_log_patient_med_day",
+        ),
+        Index("ix_dose_logs_patient_day", "patient_id", "treatment_day"),
+    )

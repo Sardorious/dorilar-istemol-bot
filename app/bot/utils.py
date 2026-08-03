@@ -1,11 +1,11 @@
-from datetime import date
+from app import tz
 from app.db.models import Patient
 
 
 def get_treatment_day(patient: Patient) -> int:
-    start = patient.start_date.date() if hasattr(patient.start_date, 'date') else patient.start_date
-    today = date.today()
-    delta = (today - start).days + 1
+    """Davolanishning nechanchi kuni — Toshkent sanasi bo'yicha."""
+    start = tz.to_local_date(patient.start_date)
+    delta = (tz.today() - start).days + 1
     return max(1, delta)
 
 
@@ -41,7 +41,7 @@ def build_day_summary(day: int, meds_with_logs: list) -> str:
     taken = sum(1 for _, log_item in meds_with_logs if log_item and log_item.status == "taken")
     total = len(meds_with_logs)
 
-    lines = [f"📅 <b>{day}-кун — Дориlar рўйхати</b>\n"]
+    lines = [f"📅 <b>{day}-кун — Дорилар рўйхати</b>\n"]
     lines.append(f"✅ {taken}/{total} истеъмол қилинди\n")
 
     current_slot = None
