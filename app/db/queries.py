@@ -177,6 +177,28 @@ async def mark_dose_taken(session: AsyncSession, dose_log_id: int):
     await session.commit()
 
 
+async def mark_dose_pending(session: AsyncSession, dose_log_id: int):
+    """Belgini olib tashlaydi — xato bosilgan dozani qaytarish uchun."""
+    await session.execute(
+        update(DoseLog).where(DoseLog.id == dose_log_id)
+        .values(status="pending", taken_at=None, snooze_until=None)
+    )
+    await session.commit()
+
+
+async def set_patient_start_date(session: AsyncSession, patient_id: int, new_start):
+    """Davolanish boshlanish sanasini o'zgartiradi.
+
+    DoseLog lar treatment_day ga bog'langan (kalendar sanasiga emas),
+    shuning uchun belgilangan holatlar saqlanib qoladi: 1-kun 1-kunligicha
+    qolaveradi, faqat u qaysi kalendar kuniga to'g'ri kelishi siljiydi.
+    """
+    await session.execute(
+        update(Patient).where(Patient.id == patient_id).values(start_date=new_start)
+    )
+    await session.commit()
+
+
 async def mark_dose_skipped(session: AsyncSession, dose_log_id: int):
     await session.execute(
         update(DoseLog).where(DoseLog.id == dose_log_id).values(status="skipped")

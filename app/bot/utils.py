@@ -1,5 +1,53 @@
+import re
+from datetime import date, datetime
+
 from app import tz
 from app.db.models import Patient
+
+# Ajratuvchi belgilar: nuqta, chiziqcha, slesh, probel
+_SEPARATORS = re.compile(r"[\s/.\-]+")
+
+# Bundan eski sana kiritilsa xato deb hisoblanadi
+MAX_PAST_DAYS = 365
+
+
+def parse_user_date(text: str) -> date | None:
+    """Foydalanuvchi yozgan sanani o'qiydi. Noto'g'ri bo'lsa None.
+
+    '25.07.2026', '25/07/2026', '25-07-2026', '25 07 2026', '25.07.26'.
+
+    DIQQAT: strptime('%Y') 2 xonali yilni ҳам қабул қилади va '26' ni
+    26-yil deb o'qiydi. Shuning uchun yil qismi qo'lda tekshiriladi.
+    """
+    parts = [p for p in _SEPARATORS.split(text.strip()) if p]
+    if len(parts) != 3:
+        return None
+
+    day, month, year = parts
+    if not (day.isdigit() and month.isdigit() and year.isdigit()):
+        return None
+
+    if len(year) == 2:
+        year = f"20{year}"
+    elif len(year) != 4:
+        return None
+
+    try:
+        # Naive parse ataylab: bu yerda faqat kalendar sanasi kerak,
+        # zona esa tz.at() da qo'shiladi.
+        return datetime.strptime(f"{day}.{month}.{year}", "%d.%m.%Y").date()
+    except ValueError:
+        return None
+
+
+def validate_start_date(value: date) -> str | None:
+    """Boshlanish sanasi mantiqiymi? Xato bo'lsa sabab matnini qaytaradi."""
+    today = tz.today()
+    if value > today:
+        return "❌ Келажакдаги сана бўлмайди. Даволаниш қачон бошланганини киритинг."
+    if (today - value).days > MAX_PAST_DAYS:
+        return f"❌ Сана жуда эски ({MAX_PAST_DAYS} кундан ортиқ). Текшириб қайта киритинг."
+    return None
 
 
 def get_treatment_day(patient: Patient) -> int:

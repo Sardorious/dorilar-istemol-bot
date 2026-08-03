@@ -1,27 +1,38 @@
 import logging
 from collections import defaultdict
-from datetime import datetime
+from datetime import date, timedelta
 
 from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandStart
+from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from sqlalchemy import func, select, update
 
 from app import tz
 from app.bot.keyboards import (
+    BTN_CALENDAR,
+    BTN_HISTORY,
+    BTN_PATIENTS,
+    BTN_SHOPPING,
+    BTN_TODAY,
+    MENU_BUTTONS,
     calendar_keyboard,
     day_meds_keyboard,
     dose_keyboard,
     main_menu_keyboard,
     patients_list_keyboard,
     snooze_keyboard,
+    start_date_keyboard,
 )
+from app.bot.states import PrescriptionSetup
 from app.bot.utils import (
     build_day_summary,
     format_status,
     format_time_slot,
     get_treatment_day,
+    parse_user_date,
+    validate_start_date,
 )
 from app.db import queries as q
 from app.db.engine import AsyncSessionLocal
@@ -37,7 +48,9 @@ router = Router()
 # ── /start ───────────────────────────────────────────────────────────────────
 
 @router.message(CommandStart())
-async def cmd_start(message: Message):
+async def cmd_start(message: Message, state: FSMContext):
+    # Yarim qolgan sana kiritish oqimini tozalaymiz
+    await state.clear()
     async with AsyncSessionLocal() as session:
         patient = await q.get_active_patient(session, message.from_user.id)
 
@@ -61,7 +74,7 @@ async def cmd_start(message: Message):
 # ── PDF qabul qilish ─────────────────────────────────────────────────────────
 
 @router.message(F.document)
-async def handle_pdf(message: Message, bot: Bot):
+async def handle_pdf(message: Message, bot: Bot, state: FSMContext):
     doc = message.document
     if not doc.file_name or not doc.file_name.lower().endswith(".pdf"):
         await message.answer("❌ Фақат PDF файл юборинг.")
@@ -81,77 +94,152 @@ async def handle_pdf(message: Message, bot: Bot):
             await status_msg.edit_text("❌ PDF дан дорилар топилмади. Бошқа файл юборинг.")
             return
 
-        start_date = tz.now()
+        # Retseptda sana bo'lsa — taklif sifatida ko'rsatamiz, lekin
+        # yakuniy qarorni foydalanuvchi qabul qiladi.
+        hint = ""
         if data.get("start_date"):
-            try:
-                parsed = datetime.strptime(data["start_date"], "%d.%m.%Y")
-                start_date = tz.at(parsed.date(), 0, 0)
-            except ValueError:
-                logger.warning("start_date o'qilmadi: %r", data.get("start_date"))
+            hint = f"\n📄 Рецептда: <b>{data['start_date']}</b>"
 
-        notes_list = data.get("daily_notes", [])
-        notes_str = "\n".join(notes_list) if notes_list else None
+        await state.set_state(PrescriptionSetup.waiting_for_start_date)
+        await state.update_data(pdf_data=data)
 
-        async with AsyncSessionLocal() as session:
-            patient = await q.create_patient_from_pdf(
-                session,
-                tg_id=message.from_user.id,
-                full_name=data.get("patient_name"),
-                start_date=start_date,
-                diagnosis=data.get("diagnosis"),
-                diet_note=data.get("diet_note"),
-                daily_notes=notes_str,
-                medications=meds,
-            )
-
-        # Yangi retsept uchun eslatmalarni DARROV rejalashtiramiz —
-        # aks holda foydalanuvchi ertangi 00:05 gacha eslatma olmaydi.
-        await schedule_daily_reminders(bot)
-
-        day = get_treatment_day(patient)
-        name_line = f"👤 <b>{patient.full_name}</b>\n" if patient.full_name else ""
-        diag_line = f"🩺 <i>{patient.diagnosis}</i>\n\n" if patient.diagnosis else "\n"
+        name_line = f"👤 <b>{data.get('patient_name')}</b>\n" if data.get("patient_name") else ""
+        diag = data.get("diagnosis")
+        diag_line = f"🩺 <i>{diag}</i>\n" if diag else ""
 
         await status_msg.edit_text(
             f"✅ <b>{len(meds)} та дори аниқланди!</b>\n\n"
-            f"{name_line}{diag_line}"
-            f"Бугун <b>{day}-кун</b>.",
+            f"{name_line}{diag_line}{hint}\n\n"
+            f"❓ <b>Даволанишни қайси кундан бошлагансиз?</b>\n"
+            f"<i>Бу 1-кун ҳисобланади.</i>",
             parse_mode="HTML",
+            reply_markup=start_date_keyboard(),
         )
-        await message.answer("Менюдан танланг:", reply_markup=main_menu_keyboard())
 
     except Exception as e:
-        logger.error(f"PDF parse xatosi: {e}", exc_info=True)
+        await state.clear()
+        logger.exception("PDF parse xatosi: %s", e)
         await status_msg.edit_text(
             "❌ PDF ўқишда хатолик юз берди. "
             "Файл тўғри рецепт эканлигини текшириб, қайта юборинг."
         )
 
 
+# ── Боshlanish kunini so'rash ────────────────────────────────────────────────
+
+async def _create_from_state(
+    message: Message, state: FSMContext, bot: Bot, start_day: date
+) -> bool:
+    """FSM da saqlangan PDF ma'lumotidan bemor yaratadi."""
+    stored = await state.get_data()
+    data = stored.get("pdf_data")
+    if not data:
+        await message.answer("❌ Маълумот эскирди. PDF ни қайта юборинг.")
+        await state.clear()
+        return False
+
+    notes_list = data.get("daily_notes", [])
+    notes_str = "\n".join(notes_list) if notes_list else None
+
+    async with AsyncSessionLocal() as session:
+        patient = await q.create_patient_from_pdf(
+            session,
+            tg_id=message.chat.id,
+            full_name=data.get("patient_name"),
+            start_date=tz.at(start_day, 0, 0),
+            diagnosis=data.get("diagnosis"),
+            diet_note=data.get("diet_note"),
+            daily_notes=notes_str,
+            medications=data.get("medications", []),
+        )
+
+    await state.clear()
+
+    # Eslatmalarni darrov rejalashtiramiz — ertangi 00:05 ni kutmasin
+    await schedule_daily_reminders(bot)
+
+    day = get_treatment_day(patient)
+    await message.answer(
+        f"✅ <b>Жадвал тайёр!</b>\n\n"
+        f"📅 Бошланиш: <b>{start_day.strftime('%d.%m.%Y')}</b>\n"
+        f"📍 Бугун — <b>{day}-кун</b>\n\n"
+        f"<i>Ўтган кунларни «📅 Календар» дан белгилашингиз мумкин.</i>",
+        parse_mode="HTML",
+        reply_markup=main_menu_keyboard(),
+    )
+    return True
+
+
+@router.callback_query(
+    PrescriptionSetup.waiting_for_start_date, F.data.startswith("setdate:")
+)
+async def cb_set_start_date(callback: CallbackQuery, bot: Bot, state: FSMContext):
+    choice = callback.data.split(":")[1]
+
+    if choice == "manual":
+        await callback.answer()
+        await callback.message.answer(
+            "✏️ Санани <b>КК.ОО.ЙЙЙЙ</b> кўринишида ёзинг.\n"
+            "<i>Масалан: 25.07.2026</i>",
+            parse_mode="HTML",
+        )
+        return
+
+    start_day = tz.today() - timedelta(days=int(choice))
+    await callback.answer()
+    await _create_from_state(callback.message, state, bot, start_day)
+
+
+@router.message(
+    PrescriptionSetup.waiting_for_start_date, F.text, ~F.text.in_(MENU_BUTTONS)
+)
+async def msg_start_date_manual(message: Message, bot: Bot, state: FSMContext):
+    parsed = parse_user_date(message.text)
+    if parsed is None:
+        await message.answer(
+            "❌ Сана тушунарсиз. <b>КК.ОО.ЙЙЙЙ</b> кўринишида ёзинг.\n"
+            "<i>Масалан: 25.07.2026</i>",
+            parse_mode="HTML",
+        )
+        return
+
+    error = validate_start_date(parsed)
+    if error:
+        await message.answer(error)
+        return
+
+    await _create_from_state(message, state, bot, parsed)
+
+
 # ── Reply tugmalar ────────────────────────────────────────────────────────────
 
-@router.message(F.text == "🗓 Бугунги дорилар")
-async def msg_today(message: Message):
+@router.message(F.text == BTN_TODAY)
+async def msg_today(message: Message, state: FSMContext):
+    await state.clear()
     await _show_today(message)
 
 
-@router.message(F.text == "📅 Календар")
-async def msg_calendar(message: Message):
+@router.message(F.text == BTN_CALENDAR)
+async def msg_calendar(message: Message, state: FSMContext):
+    await state.clear()
     await _show_calendar(message)
 
 
-@router.message(F.text == "📋 Тарих")
-async def msg_history(message: Message):
+@router.message(F.text == BTN_HISTORY)
+async def msg_history(message: Message, state: FSMContext):
+    await state.clear()
     await _show_history(message)
 
 
-@router.message(F.text == "🛒 Харид рўйхати")
-async def msg_shopping(message: Message):
+@router.message(F.text == BTN_SHOPPING)
+async def msg_shopping(message: Message, state: FSMContext):
+    await state.clear()
     await _show_shopping(message)
 
 
-@router.message(F.text == "📂 Рецептларим")
-async def msg_patients(message: Message):
+@router.message(F.text == BTN_PATIENTS)
+async def msg_patients(message: Message, state: FSMContext):
+    await state.clear()
     await _show_patients(message)
 
 
@@ -383,18 +471,34 @@ async def cb_med_detail(callback: CallbackQuery):
         text += f"ℹ️ Изоҳ: {med.note}\n"
     text += f"\n{format_status(log.status if log else 'pending')}"
 
-    kb = dose_keyboard(log.id) if log and log.status in ("pending", "snoozed") else None
+    # Holat қандай бўлишидан қатъи назар тугмалар кўрсатилади —
+    # ўтган кунни тўлдириш ёки хато белгини тузатиш учун.
+    kb = dose_keyboard(log.id, log.status) if log else None
     await callback.message.answer(text, parse_mode="HTML", reply_markup=kb)
 
 
-async def _append_to_message(callback: CallbackQuery, suffix: str):
-    """Xabar matniga natija qo'shadi. Matn yo'q/o'zgarmagan holatlarda yiqilmaydi."""
-    base = callback.message.html_text if callback.message.text else ""
+# Xabar oxiridagi holat qatorini ajratuvchi belgi. Shu belgi tufayli
+# holat qayta-qayta qo'shilib ketmaydi — har safar almashtiriladi.
+_STATUS_SEP = "\n\n───────\n"
+
+
+async def _refresh_dose_message(callback: CallbackQuery, log_id: int, status: str):
+    """Xabar matnidagi holatni yangilaydi va tugmalarni qayta chizadi."""
+    base = (callback.message.html_text or "").split(_STATUS_SEP)[0]
+    text = f"{base}{_STATUS_SEP}{format_status(status)}"
     try:
-        await callback.message.edit_text(base + suffix, parse_mode="HTML")
+        await callback.message.edit_text(
+            text, parse_mode="HTML", reply_markup=dose_keyboard(log_id, status)
+        )
     except TelegramBadRequest as e:
-        logger.warning(f"Xabarni tahrirlab bo'lmadi: {e}")
-        await callback.message.answer(suffix.strip(), parse_mode="HTML")
+        # Matn o'zgarmagan bo'lsa Telegram xato beradi — faqat tugmalarni yangilaymiz
+        logger.debug("Xabar matni tahrirlanmadi: %s", e)
+        try:
+            await callback.message.edit_reply_markup(
+                reply_markup=dose_keyboard(log_id, status)
+            )
+        except TelegramBadRequest:
+            pass
 
 
 @router.callback_query(F.data.startswith("taken:"))
@@ -402,7 +506,7 @@ async def cb_taken(callback: CallbackQuery):
     log_id = int(callback.data.split(":")[1])
     async with AsyncSessionLocal() as session:
         await q.mark_dose_taken(session, log_id)
-    await _append_to_message(callback, "\n\n✅ <b>Истеъмол қилинди!</b>")
+    await _refresh_dose_message(callback, log_id, "taken")
     await callback.answer("✅ Баракалла!")
 
 
@@ -411,8 +515,18 @@ async def cb_skip(callback: CallbackQuery):
     log_id = int(callback.data.split(":")[1])
     async with AsyncSessionLocal() as session:
         await q.mark_dose_skipped(session, log_id)
-    await _append_to_message(callback, "\n\n❌ Ўтказиб юборилди.")
-    await callback.answer()
+    await _refresh_dose_message(callback, log_id, "skipped")
+    await callback.answer("❌ Ўтказиб юборилди")
+
+
+@router.callback_query(F.data.startswith("unmark:"))
+async def cb_unmark(callback: CallbackQuery):
+    """Belgini olib tashlash — xato bosilgan bo'lsa."""
+    log_id = int(callback.data.split(":")[1])
+    async with AsyncSessionLocal() as session:
+        await q.mark_dose_pending(session, log_id)
+    await _refresh_dose_message(callback, log_id, "pending")
+    await callback.answer("↩️ Белги олиб ташланди")
 
 
 @router.callback_query(F.data.startswith("snooze_menu:"))
@@ -425,7 +539,12 @@ async def cb_snooze_menu(callback: CallbackQuery):
 @router.callback_query(F.data.startswith("back_to_dose:"))
 async def cb_back_to_dose(callback: CallbackQuery):
     log_id = int(callback.data.split(":")[1])
-    await callback.message.edit_reply_markup(reply_markup=dose_keyboard(log_id))
+    async with AsyncSessionLocal() as session:
+        log = (
+            await session.execute(select(DoseLog).where(DoseLog.id == log_id))
+        ).scalar_one_or_none()
+    status = log.status if log else "pending"
+    await callback.message.edit_reply_markup(reply_markup=dose_keyboard(log_id, status))
     await callback.answer()
 
 
@@ -449,6 +568,95 @@ async def cb_snooze(callback: CallbackQuery, bot: Bot):
             f"⏰ <b>{label} дан кейин эслатаман</b>\n\n{med.name}", parse_mode="HTML"
         )
     await callback.answer()
+
+
+@router.callback_query(F.data == "edit_start_date")
+async def cb_edit_start_date(callback: CallbackQuery, state: FSMContext):
+    async with AsyncSessionLocal() as session:
+        patient = await q.get_active_patient(session, callback.from_user.id)
+
+    if not patient:
+        await callback.answer("Аввал PDF юборинг", show_alert=True)
+        return
+
+    current = tz.to_local_date(patient.start_date)
+    await state.set_state(PrescriptionSetup.waiting_for_new_start_date)
+    await state.update_data(patient_id=patient.id)
+    await callback.answer()
+    await callback.message.answer(
+        f"📅 Ҳозирги бошланиш куни: <b>{current.strftime('%d.%m.%Y')}</b>\n\n"
+        f"❓ Янги санани танланг:",
+        parse_mode="HTML",
+        reply_markup=start_date_keyboard(prefix="newdate"),
+    )
+
+
+async def _apply_new_start_date(
+    message: Message, state: FSMContext, bot: Bot, start_day: date
+):
+    stored = await state.get_data()
+    patient_id = stored.get("patient_id")
+    if not patient_id:
+        await message.answer("❌ Маълумот эскирди. Қайтадан уриниб кўринг.")
+        await state.clear()
+        return
+
+    async with AsyncSessionLocal() as session:
+        await q.set_patient_start_date(session, patient_id, tz.at(start_day, 0, 0))
+        patient = (
+            await session.execute(select(Patient).where(Patient.id == patient_id))
+        ).scalar_one_or_none()
+
+    await state.clear()
+    await schedule_daily_reminders(bot)
+
+    day = get_treatment_day(patient) if patient else 1
+    await message.answer(
+        f"✅ Бошланиш куни <b>{start_day.strftime('%d.%m.%Y')}</b> га ўзгартирилди.\n"
+        f"📍 Бугун — <b>{day}-кун</b>.",
+        parse_mode="HTML",
+        reply_markup=main_menu_keyboard(),
+    )
+
+
+@router.callback_query(
+    PrescriptionSetup.waiting_for_new_start_date, F.data.startswith("newdate:")
+)
+async def cb_new_start_date(callback: CallbackQuery, bot: Bot, state: FSMContext):
+    choice = callback.data.split(":")[1]
+
+    if choice == "manual":
+        await callback.answer()
+        await callback.message.answer(
+            "✏️ Санани <b>КК.ОО.ЙЙЙЙ</b> кўринишида ёзинг.",
+            parse_mode="HTML",
+        )
+        return
+
+    await callback.answer()
+    await _apply_new_start_date(
+        callback.message, state, bot, tz.today() - timedelta(days=int(choice))
+    )
+
+
+@router.message(
+    PrescriptionSetup.waiting_for_new_start_date, F.text, ~F.text.in_(MENU_BUTTONS)
+)
+async def msg_new_start_date_manual(message: Message, bot: Bot, state: FSMContext):
+    parsed = parse_user_date(message.text)
+    if parsed is None:
+        await message.answer(
+            "❌ Сана тушунарсиз. <b>КК.ОО.ЙЙЙЙ</b> кўринишида ёзинг.",
+            parse_mode="HTML",
+        )
+        return
+
+    error = validate_start_date(parsed)
+    if error:
+        await message.answer(error)
+        return
+
+    await _apply_new_start_date(message, state, bot, parsed)
 
 
 @router.callback_query(F.data.startswith("switch_patient:"))
