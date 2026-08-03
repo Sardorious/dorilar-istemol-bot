@@ -70,7 +70,9 @@ async def send_reminder(
     if not await _dose_still_pending(dose_log_id):
         return
 
-    from app.bot.keyboards import dose_keyboard  # noqa: PLC0415 — aylanma importni oldini olish
+    # Ataylab funksiya ichida: yuqori darajada import qilinsa aylanma
+    # import hosil bo'ladi (modul boshidagi izohga qarang).
+    from app.bot.keyboards import dose_keyboard
 
     try:
         text = (
