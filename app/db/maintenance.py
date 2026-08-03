@@ -9,7 +9,7 @@ Funksiya idempotent — har startda xavfsiz ishlaydi.
 """
 import logging
 
-from sqlalchemy import select, update, func
+from sqlalchemy import func, select, update
 
 from app.db.engine import AsyncSessionLocal
 from app.db.models import Patient

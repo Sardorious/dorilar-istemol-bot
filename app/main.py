@@ -6,12 +6,12 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from apscheduler.triggers.cron import CronTrigger
 
 from app import tz
+from app.bot.handlers import router
 from app.config import settings
 from app.db import init_db
 from app.db.maintenance import deduplicate_active_patients
-from app.bot.handlers import router
-from app.scheduler.jobs import scheduler, start_scheduler
 from app.scheduler.daily import schedule_daily_reminders
+from app.scheduler.jobs import scheduler, start_scheduler
 
 logging.basicConfig(
     level=logging.INFO,

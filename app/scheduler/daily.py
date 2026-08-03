@@ -1,11 +1,12 @@
 import logging
 
+from aiogram import Bot
+from apscheduler.jobstores.base import JobLookupError
 from sqlalchemy import select
 
 from app import tz
-from aiogram import Bot
-from app.db.engine import AsyncSessionLocal
 from app.db import queries as q
+from app.db.engine import AsyncSessionLocal
 from app.db.models import Patient
 from app.scheduler.jobs import schedule_reminder, scheduler
 
@@ -29,9 +30,11 @@ def _purge_daily_jobs():
         if job.id.startswith(DAILY_JOB_PREFIX):
             try:
                 scheduler.remove_job(job.id)
+            except JobLookupError:
+                # Job shu orada o'zi otilib bo'lgan — normal holat
+                logger.debug("Job allaqachon yo'q: %s", job.id)
+            else:
                 removed += 1
-            except Exception:
-                pass
     if removed:
         logger.info("%s та эски эслатма job тозаланди", removed)
 
